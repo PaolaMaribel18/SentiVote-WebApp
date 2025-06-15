@@ -14,14 +14,27 @@ modelo = pipeline("sentiment-analysis", model="finiteautomata/beto-sentiment-ana
 def analizar():
     datos = request.json
     textos = datos.get("textos", [])
+    
+    # Eliminar valores None o vacíos
+    textos = [t for t in textos if t is not None and t.strip() != ""]
+
+    
+    print("Textos recibidos:", textos)  # 🖨️ Imprime los textos antes de analizarlos
+
 
     resultados = modelo(textos)
+    
+    print("Resultados del análisis:")
+    for texto, resultado in zip(textos, resultados):
+        print(f"- Texto: {texto}")
+        print(f"  Sentimiento: {resultado['label']}, Confianza: {round(resultado['score'], 3)}")
+
 
     # Formato: [{'label': 'POS', 'score': 0.98}, ...]
     respuesta = []
     for i, r in enumerate(resultados):
         respuesta.append({
-            "texto": textos[i],
+            "texto": textos[i], # texto_comentario_limpio
             "sentimiento": r["label"],
             "confianza": round(r["score"], 3)
         })
@@ -31,7 +44,7 @@ def analizar():
 
 @app.route("/api/tweets", methods=["GET"])
 def obtener_tweets():
-    ruta = os.path.join(os.path.dirname(__file__), "../data/tweets_simulados.json")
+    ruta = os.path.join(os.path.dirname(__file__), "../data/corpus_completo.json")
     print("Ruta del archivo JSON:", ruta)
     try:
         with open(ruta, "r", encoding="utf-8") as f:
