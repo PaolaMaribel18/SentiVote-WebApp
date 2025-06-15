@@ -49,7 +49,7 @@ La app se ejecutará por defecto en: http://localhost:5173
 
 #### Ejecutar el servidor
 
-    python app.py
+    python main.py
 
 El backend estará activo en: http://localhost:5000
 
