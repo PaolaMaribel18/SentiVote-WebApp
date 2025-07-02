@@ -11,11 +11,12 @@ SentiVote es una aplicación web que permite analizar el sentimiento de opinione
     ├── backend/                  # Servidor Flask y modelo de análisis de sentimiento
     │   ├── app.py
     │   └── ../data/              # Tweets simulados en formato JSON
-    │       └── tweets_simulados.json
+    │       └── corpus_completo.json
     │
     ├── frontend/                 # Aplicación React
     │   ├── src/
     │   │   ├── components/
+    |   |   ├──types
     │   │   └── App.jsx
     │   └── package.json
     │
