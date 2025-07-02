@@ -1,0 +1,20 @@
+[
+  {
+    "ciudad": "Quito",
+    "nombre": "CandidatoX",
+    "usuario": "usuario_1",
+    "texto": "Me encanta la propuesta de CandidatoX, necesitamos ese cambio"
+  },
+  {
+    "ciudad": "Guayaquil",
+    "nombre": "CandidatoX",
+    "usuario": "usuario_2",
+    "texto": "No confío en CandidatoX, siempre dice lo mismo"
+  },
+  {
+    "ciudad": "Quito",
+    "nombre": "CandidatoX",
+    "usuario": "usuario_3",
+    "texto": "CandidatoX tiene buenas ideas, pero no sé si las cumplirá"
+  }
+]
