@@ -10,7 +10,7 @@ SentiVote es una aplicación web que permite analizar el sentimiento de opinione
     │
     ├── backend/                  # Servidor Flask y modelo de análisis de sentimiento
     │   ├── app.py
-    │   └── ../data/              # Tweets simulados en formato JSON
+    │   └── ../data/              # Tweets en formato JSON
     │       └── corpus_completo.json
     │
     ├── frontend/                 # Aplicación React
@@ -46,7 +46,11 @@ La app se ejecutará por defecto en: http://localhost:5173
 
 #### Instalar dependencias
 
-    pip install flask flask-cors transformers
+    pip install -r requirements.txt
+
+#### Configura las variables de entorno
+
+    touch .env
 
 #### Ejecutar el servidor
 
@@ -56,4 +60,4 @@ El backend estará activo en: http://localhost:5000
 
 ---
 
-> ✅ Asegúrate de que el archivo `tweets_simulados.json` esté ubicado en la carpeta `data/` al mismo nivel del backend.
+> ✅ Asegúrate de que el archivo `corpus_data.json` esté ubicado en la carpeta `data/` al mismo nivel del backend.
