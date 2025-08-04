@@ -11,6 +11,13 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Para evitar problemas con GUI
 import re
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
+
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model_gemini = genai.GenerativeModel("gemini-1.5-flash-latest")
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173", "http://localhost:3000"])
@@ -124,9 +131,37 @@ def generar_wordcloud(textos):
         print(f"Error generando wordcloud: {e}")
         return None
 
+def generar_wordclouds_por_sentimiento(publicaciones):
+    textos_por_sentimiento = {
+        "POS": [],
+        "NEG": [],
+        "NEU": []
+    }
+
+    for pub in publicaciones:
+        sentimiento = pub.get("sentimiento_final", "NEU")
+        textos_por_sentimiento[sentimiento].append(pub["texto"])
+        for comentario in pub.get("comentarios", []):
+            textos_por_sentimiento[sentimiento].append(comentario["texto_comentario"])
+            
+    # DEBUG: ver cuántos textos hay por sentimiento
+    for key, textos in textos_por_sentimiento.items():
+        print(f"[WordCloud] {key}: {len(textos)} textos")
+
+
+    wordclouds_sentimiento = {}
+    for sentimiento, textos in textos_por_sentimiento.items():
+        img_base64 = generar_wordcloud(textos)
+        wordclouds_sentimiento[sentimiento] = {
+            "imagen": img_base64,"palabras": wordcloud.words_ if img_base64 else {}
+        }
+
+    return wordclouds_sentimiento
+
+
 def cargar_corpus():
     """Cargar el corpus de datos"""
-    ruta = os.path.join(os.path.dirname(__file__), "data/corpus_completo.json")
+    ruta = os.path.join(os.path.dirname(__file__), "data\\corpus_completo.json")
     print("Ruta del archivo JSON:", ruta)
     
     try:
@@ -331,21 +366,56 @@ def analizar():
             })
 
         # Generar wordcloud general
-        print("Generando wordcloud...")
-        wordcloud_image = generar_wordcloud(todos_los_textos)
+        print("Generando wordclouds...")
+        wordcloud_general = generar_wordcloud(todos_los_textos)
+        wordclouds_por_sentimiento = generar_wordclouds_por_sentimiento(publicaciones_procesadas)
+
+
         
         response_data = {
             "publicaciones": publicaciones_procesadas,
-            "wordcloud": wordcloud_image,
+            "wordcloud": {
+            "general": wordcloud_general,
+            "por_sentimiento": wordclouds_por_sentimiento
+            },
             "total_textos_analizados": len(todos_los_textos)
         }
-
+        
         print(f"Publicaciones procesadas exitosamente: {len(publicaciones_procesadas)}")
         return jsonify(response_data)
         
     except Exception as e:
         print(f"Error en endpoint /analizar: {e}")
         return jsonify({"error": f"Error interno del servidor: {str(e)}"}), 500
+
+@app.route("/conclusiones", methods=["POST"])
+def generar_conclusiones():
+    try:
+        datos = request.json
+        query = datos.get("query", "Consulta desconocida")
+        wordclouds = datos.get("wordclouds", {})
+        
+        prompt = f"""
+        Eres un asistente experto en análisis sociopolítico. Dada la siguiente consulta: "{query}",
+        y las palabras más frecuentes por sentimiento:
+
+        - Positivas: {wordclouds.get("POS", "")}
+        - Negativas: {wordclouds.get("NEG", "")}
+        - Neutrales: {wordclouds.get("NEU", "")}
+
+        Redacta una conclusión clara y concisa en máximo 3 frases. Sé objetivo, evita repetir palabras, y
+        resume el tono general de la conversación.
+        """
+
+        respuesta = model_gemini.generate_content(prompt)
+        conclusion = respuesta.text.strip()
+
+        return jsonify({"conclusion": conclusion})
+
+    except Exception as e:
+        print(f"Error generando conclusión: {e}")
+        return jsonify({"error": "No se pudo generar la conclusión."}), 500
+
 
 if __name__ == "__main__":
     print("Iniciando servidor Flask...")
