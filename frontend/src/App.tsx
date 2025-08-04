@@ -7,6 +7,9 @@ import { SentimentChart } from './components/SentimentChart';
 import { ReportGenerator } from './components/ReportGenerator';
 import { SearchFilters, SentimentAnalysis } from './types';
 
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPersonBooth } from "@fortawesome/free-solid-svg-icons";
+
 // Configuración de la API
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -33,21 +36,30 @@ interface BackendPost {
 
 interface BackendResponse {
   publicaciones: BackendPost[];
-  wordcloud: string; // Base64 string de la imagen
-  total_textos_analizados: number;
+  wordcloud: {
+    general: string;
+    por_sentimiento: {
+      POS: { imagen: string; palabras: Record<string, number> } | null;
+      NEG: { imagen: string; palabras: Record<string, number> } | null;
+      NEU: { imagen: string; palabras: Record<string, number> } | null;
+    };
+
+  }; total_textos_analizados: number;
 }
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState<SentimentAnalysis | null>(null);
   const [backendPosts, setBackendPosts] = useState<BackendPost[]>([]);
-  const [wordcloudImage, setWordcloudImage] = useState<string | null>(null);
+  const [wordcloudImage, setWordcloudImage] = useState<BackendResponse['wordcloud'] | null>(null);
+  const [conclusion, setConclusion] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (filters: SearchFilters) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/analizar`, {
         method: 'POST',
@@ -69,15 +81,64 @@ function App() {
       }
 
       const backendData: BackendResponse = await response.json();
-      
+
       // Guardar los datos del backend
       setBackendPosts(backendData.publicaciones);
-      setWordcloudImage(backendData.wordcloud);
-      
-      // Convertir los datos para el análisis del frontend
-      const convertedAnalysis = convertBackendDataToFrontend(backendData.publicaciones, filters.query);
-      setCurrentAnalysis(convertedAnalysis);
-      
+
+      // Generar la conclusión usando el backend
+      const palabrasFrecuentes = {
+        POS: backendData.wordcloud.por_sentimiento.POS?.palabras ?? {},
+        NEG: backendData.wordcloud.por_sentimiento.NEG?.palabras ?? {},
+        NEU: backendData.wordcloud.por_sentimiento.NEU?.palabras ?? {}
+      };
+
+      console.log("Enviando a /conclusiones:", {
+        query: filters.query,
+        wordclouds: palabrasFrecuentes
+      });
+
+      try {
+        const conclusionResponse = await fetch(`${API_BASE_URL}/conclusiones`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: filters.query,
+            wordclouds: palabrasFrecuentes
+          })
+        });
+
+        const conclusionData = await conclusionResponse.json();
+        console.log("Respuesta del endpoint /conclusiones:", conclusionData);
+
+        const conclusionText = conclusionData.conclusion ?? null;
+        setConclusion(conclusionText);
+
+        // ✅ Aquí generamos el análisis final con la conclusión real
+        const convertedAnalysis = convertBackendDataToFrontend(
+          backendData.publicaciones,
+          filters.query,
+          conclusionText
+        );
+        setCurrentAnalysis(convertedAnalysis);
+
+      } catch (error) {
+        console.warn("No se pudo generar la conclusión automáticamente.", error);
+
+        // Aún generamos el análisis sin conclusión
+        const convertedAnalysis = convertBackendDataToFrontend(
+          backendData.publicaciones,
+          filters.query,
+          null
+        );
+        setCurrentAnalysis(convertedAnalysis);
+      }
+
+      // Guardar la imagen de la wordcloud
+      setWordcloudImage({
+        general: backendData.wordcloud.general,
+        por_sentimiento: backendData.wordcloud.por_sentimiento
+      });
+
     } catch (error) {
       console.error('Error al realizar la búsqueda:', error);
       setError(error instanceof Error ? error.message : 'Error desconocido');
@@ -86,10 +147,11 @@ function App() {
     }
   };
 
-  const convertBackendDataToFrontend = (backendData: BackendPost[], query: string): SentimentAnalysis => {
+  const convertBackendDataToFrontend = (backendData: BackendPost[], query: string, conclusion?: string | null
+  ): SentimentAnalysis => {
     // Contar todos los comentarios para el análisis general
     const allComments = backendData.flatMap(post => post.comentarios);
-    
+
     // Calcular estadísticas basadas en publicaciones Y comentarios
     const totalPosts = backendData.length;
     const totalComments = allComments.length;
@@ -161,7 +223,8 @@ function App() {
         negative: [],
         neutral: []
       }, // Vacío porque usamos la imagen del backend
-      comments: []
+      comments: [],
+      conclusion: typeof conclusion === 'string' ? conclusion : String(conclusion)
     };
 
     return analysis;
@@ -185,9 +248,11 @@ function App() {
         {/* Header */}
         <header className="text-center mb-12">
           <div className="flex items-center justify-center mb-4">
-            <Brain className="w-12 h-12 text-blue-600 mr-3" />
+
             <h1 className="text-4xl font-bold text-gray-900">
-              Análisis de Sentimientos
+
+              <FontAwesomeIcon icon={faPersonBooth} className="mr-2 text-indigo-600" />
+              SentiVote-Análisis de Sentimientos
             </h1>
           </div>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
@@ -241,7 +306,7 @@ function App() {
             {/* Charts and Analytics */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <SentimentChart data={currentAnalysis.summary} />
-              
+
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                   <BarChart3 className="w-5 h-5 mr-2" />
@@ -288,8 +353,8 @@ function App() {
                   Nube de Palabras General
                 </h3>
                 <div className="flex justify-center">
-                  <img 
-                    src={`data:image/png;base64,${wordcloudImage}`}
+                  <img
+                    src={`data:image/png;base64,${wordcloudImage?.general ?? ''}`}
                     alt="Nube de palabras general"
                     className="max-w-full h-auto rounded-lg shadow-md"
                     style={{ maxHeight: '500px' }}
@@ -300,6 +365,57 @@ function App() {
                 </p>
               </div>
             )}
+            {/* Wordclouds por Sentimiento */}
+            {wordcloudImage?.por_sentimiento && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                {wordcloudImage.por_sentimiento.POS && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <h4 className="text-lg font-semibold text-green-600 text-center mb-2">Palabras Positivas</h4>
+                    <img
+                      src={`data:image/png;base64,${wordcloudImage.por_sentimiento.POS?.imagen ?? ''}`}
+                      alt="Nube de palabras positivas"
+                      className="max-w-full h-auto mx-auto rounded-md shadow"
+                    />
+                  </div>
+                )}
+                {wordcloudImage.por_sentimiento.NEG && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <h4 className="text-lg font-semibold text-red-600 text-center mb-2">Palabras Negativas</h4>
+                    <img
+                      src={`data:image/png;base64,${wordcloudImage.por_sentimiento.NEG?.imagen ?? ''}`}
+                      alt="Nube de palabras positivas"
+                      className="max-w-full h-auto mx-auto rounded-md shadow"
+                    />
+                  </div>
+                )}
+                {wordcloudImage.por_sentimiento.NEU && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <h4 className="text-lg font-semibold text-gray-600 text-center mb-2">Palabras Neutrales</h4>
+                    <img
+                      src={`data:image/png;base64,${wordcloudImage.por_sentimiento.NEU?.imagen ?? ''}`}
+                      alt="Nube de palabras neutrales"
+                      className="max-w-full h-auto mx-auto rounded-md shadow"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Conclusión del Análisis */}
+            {conclusion && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+                  Conclusión del Análisis
+                </h3>
+                <p className="text-gray-700 text-lg text-center leading-relaxed whitespace-pre-line">
+                  {conclusion}
+                </p>
+                <p className="text-xs text-gray-500 italic mt-2">
+                  * Esta conclusión fue generada automáticamente por un modelo de lenguaje (Gemini Flash 2.0).
+                </p>
+              </div>
+            )}
+
+
 
             {/* Posts List with Expandable Comments */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -317,7 +433,7 @@ function App() {
 
               {/* Columna derecha - Generador de reportes */}
               <div className="h-[600px]">
-                <ReportGenerator analysis={currentAnalysis} backendPosts={backendPosts}/>
+                <ReportGenerator analysis={currentAnalysis} backendPosts={backendPosts} />
               </div>
             </div>
           </div>
@@ -331,7 +447,7 @@ function App() {
               Comienza tu Análisis
             </h3>
             <p className="text-gray-500 max-w-md mx-auto">
-              Ingresa el nombre de un candidato o palabra clave para iniciar el análisis de sentimientos 
+              Ingresa el nombre de un candidato o palabra clave para iniciar el análisis de sentimientos
               en redes sociales sobre temas políticos del Ecuador.
             </p>
           </div>

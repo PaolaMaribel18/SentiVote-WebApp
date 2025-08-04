@@ -39,6 +39,7 @@ export interface SentimentAnalysis {
     neutral: WordCloudItem[];
   };
   comments?: string[];
+  conclusion?: string;
 }
 
 export interface WordCloudItem {
