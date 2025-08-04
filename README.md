@@ -28,7 +28,7 @@ SentiVote es una aplicación web que permite analizar el sentimiento de opinione
 
 ### 🖥️ Frontend (React)
 
-    cd sentivote
+    cd frontend
     npm install
     npm run dev
 
