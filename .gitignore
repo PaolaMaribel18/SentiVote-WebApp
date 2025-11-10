@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+
+# Entornos virtuales
+venv/
+.env/
+
+# Archivos temporales y de sistema
+*.log
+.DS_Store
+Thumbs.db
+
+# Datos
+src/datasets/raw/*
+src/datasets/processed/*
+
+# Notebooks de prueba
+*.ipynb_checkpoints
+
+# Archivos de configuración sensibles
+.env
+config.json
