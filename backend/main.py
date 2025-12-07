@@ -16,13 +16,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model_gemini = genai.GenerativeModel("gemini-1.5-flash-latest")
+# --- CORRECCIÓN 1: Nombre del modelo estable ---
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
+    model_gemini = genai.GenerativeModel("gemini-2.5-flash")
+else:
+    print("⚠️ ADVERTENCIA: No se encontró GEMINI_API_KEY en .env")
+    model_gemini = None
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173", "http://localhost:3000"])
 
-# Cargar modelo de análisis de sentimiento en español
+# Cargar modelo de análisis de sentimiento
 try:
     modelo = pipeline("sentiment-analysis", model="finiteautomata/beto-sentiment-analysis")
     print("Modelo BETO cargado exitosamente")
@@ -31,21 +37,19 @@ except Exception as e:
     print("Usando modelo alternativo...")
     modelo = pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
 
-# Diccionario de palabras positivas y negativas
+# Diccionarios
 diccionario_positivo = [
     "bueno", "excelente", "positivo", "genial", "amor", "éxito", "feliz", "maravilloso", 
     "fortaleza", "esperanza", "progreso", "desarrollo", "bienestar", "paz", "justicia",
-    "honesto", "transparente", "eficiente", "competente", "liderazgo", "experiencia"
+    "honesto", "transparente", "eficiente", "competente", "liderazgo", "experiencia", "ganar", "vamos"
 ]
 
 diccionario_negativo = [
     "malo", "horrible", "negativo", "terrible", "odio", "fracaso", "débil", "miseria", 
     "desastre", "corrupción", "mentira", "robo", "incompetente", "ineficiente", "crisis",
-    "problema", "conflicto", "violencia", "inseguridad", "pobreza", "desempleo"
+    "problema", "conflicto", "violencia", "inseguridad", "pobreza", "desempleo", "ladron", "narco"
 ]
 
-# Palabras vacías en español para el wordcloud
-# Articulos relacionados a los mapas de palabras
 STOP_WORDS_ES = {
     'el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 
     'da', 'su', 'por', 'son', 'con', 'para', 'al', 'del', 'los', 'las', 'una', 'pero', 
@@ -68,68 +72,54 @@ STOP_WORDS_ES = {
     'rt', 'via', 'https', 'http', 'www', 'com', 'co', 'ec', 'org'
 }
 
-# Valor de alfa
 alpha = 0.4
 
 def limpiar_texto_para_wordcloud(texto):
     """Limpia el texto para el wordcloud"""
-    # Remover URLs
+    if not texto: return ""
     texto = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', texto)
-    # Remover menciones @usuario
     texto = re.sub(r'@\w+', '', texto)
-    # Remover hashtags pero mantener el texto
     texto = re.sub(r'#(\w+)', r'\1', texto)
-    # Remover caracteres especiales excepto letras, números y espacios
     texto = re.sub(r'[^\w\s]', ' ', texto)
-    # Remover números solos
     texto = re.sub(r'\b\d+\b', '', texto)
-    # Normalizar espacios
     texto = re.sub(r'\s+', ' ', texto).strip()
     return texto.lower()
 
 def generar_wordcloud(textos):
     """Genera un wordcloud a partir de una lista de textos"""
     try:
-        # Combinar todos los textos
         texto_combinado = ' '.join([limpiar_texto_para_wordcloud(texto) for texto in textos if texto.strip()])
         
-        if not texto_combinado.strip():
-            return None
+        # Validar si hay suficientes palabras (al menos 1 palabra válida)
+        if not texto_combinado.strip() or len(texto_combinado) < 3:
+            return None, {} 
         
-        # Configuración del wordcloud
         wordcloud = WordCloud(
-            width=800,
-            height=400,
+            width=800, height=400,
             background_color='white',
             max_words=50,
             stopwords=STOP_WORDS_ES,
-            min_font_size=10,
-            max_font_size=80,
+            min_font_size=10, max_font_size=80,
             colormap='viridis',
             relative_scaling=0.5,
             random_state=42
         ).generate(texto_combinado)
         
-        # Crear la imagen
         plt.figure(figsize=(10, 5))
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis('off')
         
-        # Convertir a base64
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150, 
-                   facecolor='white', edgecolor='none')
+        plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150, facecolor='white', edgecolor='none')
         img_buffer.seek(0)
-        
-        # Codificar en base64
         img_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
         plt.close()
         
-        return img_base64
+        return img_base64, wordcloud.words_
         
     except Exception as e:
         print(f"Error generando wordcloud: {e}")
-        return None
+        return None, {}
 
 def generar_wordclouds_por_sentimiento(publicaciones):
     textos_por_sentimiento = {
@@ -138,287 +128,259 @@ def generar_wordclouds_por_sentimiento(publicaciones):
         "NEU": []
     }
 
+    # --- CORRECCIÓN DE LÓGICA DE AGRUPACIÓN ---
     for pub in publicaciones:
-        sentimiento = pub.get("sentimiento_final", "NEU")
-        textos_por_sentimiento[sentimiento].append(pub["texto"])
+        # 1. El texto del POST va a la categoría del POST
+        sentimiento_post = pub.get("sentiment", "NEU") # Usamos "sentiment" que es la clave que definimos en procesar
+        if sentimiento_post in textos_por_sentimiento:
+            textos_por_sentimiento[sentimiento_post].append(pub.get("text", "")) 
+        
+        # 2. El texto del COMENTARIO va a la categoría del COMENTARIO (Independiente del post)
         for comentario in pub.get("comentarios", []):
-            textos_por_sentimiento[sentimiento].append(comentario["texto_comentario"])
+            sentimiento_com = comentario.get("sentimiento_comentario", "NEU")
+            if sentimiento_com in textos_por_sentimiento:
+                textos_por_sentimiento[sentimiento_com].append(comentario["texto_comentario"])
             
-    # DEBUG: ver cuántos textos hay por sentimiento
+    # DEBUG: Ver distribución real de palabras
+    print("--- Distribución de textos para Nubes de Palabras ---")
     for key, textos in textos_por_sentimiento.items():
-        print(f"[WordCloud] {key}: {len(textos)} textos")
-
+        print(f"[{key}]: {len(textos)} textos acumulados.")
 
     wordclouds_sentimiento = {}
     for sentimiento, textos in textos_por_sentimiento.items():
-        img_base64 = generar_wordcloud(textos)
+        img_base64, palabras_frecuentes = generar_wordcloud(textos)
+        
         wordclouds_sentimiento[sentimiento] = {
-            "imagen": img_base64,"palabras": wordcloud.words_ if img_base64 else {}
+            "imagen": img_base64, # Puede ser None si no hay suficientes palabras
+            "palabras": palabras_frecuentes if img_base64 else {}
         }
 
     return wordclouds_sentimiento
 
-
 def cargar_corpus():
-    """Cargar el corpus de datos"""
-    ruta = os.path.join(os.path.dirname(__file__), "data\\corpus_completo.json")
-    print("Ruta del archivo JSON:", ruta)
-    
+    ruta = os.path.join(os.path.dirname(__file__), "data/corpus.json") 
     try:
         with open(ruta, "r", encoding="utf-8") as f:
-            corpus = json.load(f)
-        print(f"Corpus cargado exitosamente: {len(corpus)} publicaciones")
-        return corpus
+            return json.load(f)
     except FileNotFoundError:
-        print("ERROR: Archivo corpus_completo.json no encontrado")
+        print("ERROR: Archivo corpus.json no encontrado")
         return []
-    except json.JSONDecodeError as e:
-        print(f"ERROR: Error al decodificar JSON: {e}")
-        return []
-
-def filtrar_por_fecha(publicaciones, fecha_desde=None, fecha_hasta=None):
-    """Filtrar publicaciones por rango de fechas"""
-    if not fecha_desde and not fecha_hasta:
-        return publicaciones
-    return publicaciones
 
 def analizar_texto_con_diccionario(texto, sentimiento_modelo, confianza_modelo):
-    """Mejorar el análisis usando el diccionario de palabras"""
     texto_lower = texto.lower()
-    
     palabras_positivas = sum(1 for palabra in diccionario_positivo if palabra in texto_lower)
     palabras_negativas = sum(1 for palabra in diccionario_negativo if palabra in texto_lower)
     
     if palabras_positivas > palabras_negativas and palabras_positivas > 0:
-        return "POS", min(confianza_modelo + 0.1, 1.0)
+        return "POS", min(confianza_modelo + 0.15, 1.0) # Aumentamos peso al diccionario
     elif palabras_negativas > palabras_positivas and palabras_negativas > 0:
-        return "NEG", min(confianza_modelo + 0.1, 1.0)
+        return "NEG", min(confianza_modelo + 0.15, 1.0)
     else:
         return sentimiento_modelo, confianza_modelo
 
 @app.route("/", methods=["GET"])
 def home():
-    """Endpoint de prueba"""
-    return jsonify({
-        "mensaje": "API de Análisis de Sentimientos funcionando",
-        "endpoints": {
-            "/analizar": "POST - Analizar sentimientos de un candidato",
-            "/salud": "GET - Verificar estado de la API"
-        }
-    })
+    return jsonify({"mensaje": "API Activa", "endpoints": ["/analizar", "/conclusiones"]})
 
 @app.route("/salud", methods=["GET"])
 def salud():
-    """Verificar el estado de la API"""
     corpus = cargar_corpus()
     return jsonify({
         "estado": "activo",
-        "modelo_cargado": True,
-        "publicaciones_disponibles": len(corpus),
-        "candidatos_disponibles": list(set([post.get("candidato", "Sin candidato") for post in corpus]))
+        "publicaciones": len(corpus),
+        "modelos": "Gemini 1.5 Flash + BETO"
     })
 
 @app.route("/analizar", methods=["POST"])
 def analizar():
-    """Endpoint principal para análisis de sentimientos"""
     try:
         datos = request.json
-        if not datos:
-            return jsonify({"error": "No se recibieron datos JSON"}), 400
-        
         query = datos.get("query", "").strip()
         fecha_desde = datos.get("dateFrom")
         fecha_hasta = datos.get("dateTo")
-        plataformas = datos.get("platforms", [])
-        min_engagement = datos.get("minEngagement", 0)
         
         if not query:
-            return jsonify({"error": "La consulta (query) es requerida."}), 400
+            return jsonify({"error": "Query requerida"}), 400
         
         print(f"Búsqueda recibida: '{query}'")
-        
-        # Cargar corpus
         corpus = cargar_corpus()
-        if not corpus:
-            return jsonify({"error": "No se pudo cargar el corpus de datos"}), 500
-
-        # Depuración: Mostrar candidatos disponibles
-        candidatos_disponibles = [post.get("candidato", "Sin candidato") for post in corpus]
-        print(f"Candidatos disponibles: {set(candidatos_disponibles)}")
-
-        # Búsqueda flexible
-        publicaciones_filtradas = []
-        for post in corpus:
-            candidato = post.get("candidato", "").lower()
-            if query.lower() in candidato or any(word.lower() in candidato for word in query.split()):
-                publicaciones_filtradas.append(post)
         
+        # Filtrado simple
+        publicaciones_filtradas = [
+            p for p in corpus 
+            if query.lower() in p.get("candidato", "").replace("_", " ").lower() or 
+            query.lower() in p.get("texto", "").lower()
+        ]
+        
+        # Filtrar por fecha si es necesario (Implementación básica)
+        if fecha_desde or fecha_hasta:
+            # Aquí iría lógica de fecha si el string coincide
+            pass
+
         print(f"Publicaciones encontradas: {len(publicaciones_filtradas)}")
         
         if not publicaciones_filtradas:
-            return jsonify({
-                "mensaje": f"No se encontraron publicaciones para '{query}'.",
-                "candidatos_disponibles": list(set(candidatos_disponibles))
-            }), 404
+            return jsonify({"mensaje": "No se encontraron resultados", "publicaciones": []}), 200
 
-        # Filtrar por fechas
-        publicaciones_filtradas = filtrar_por_fecha(publicaciones_filtradas, fecha_desde, fecha_hasta)
-
-        # Procesar las publicaciones filtradas
         publicaciones_procesadas = []
-        todos_los_textos = []  # Para el wordcloud general
+        todos_los_textos = [] 
         
         for post in publicaciones_filtradas:
-            print(f"Procesando publicación del candidato {post.get('candidato', 'Sin candidato')}")
-            
-            # Analizar la publicación
             texto_publicacion = post.get("texto", "")
-            if not texto_publicacion:
-                continue
+            if not texto_publicacion: continue
             
-            # Agregar texto al wordcloud general
             todos_los_textos.append(texto_publicacion)
-                
+            
+            # 1. Análisis del Post
             try:
-                resultado_publicacion = modelo([texto_publicacion])[0]
-                sentimiento_publicacion = resultado_publicacion["label"]
-                confianza_publicacion = round(resultado_publicacion["score"], 3)
-                
-                sentimiento_publicacion, confianza_publicacion = analizar_texto_con_diccionario(
-                    texto_publicacion, sentimiento_publicacion, confianza_publicacion
+                res_post = modelo([texto_publicacion])[0]
+                sent_post, conf_post = analizar_texto_con_diccionario(
+                    texto_publicacion, res_post["label"], res_post["score"]
                 )
-                
-            except Exception as e:
-                print(f"Error analizando publicación: {e}")
-                sentimiento_publicacion = "NEU"
-                confianza_publicacion = 0.5
+            except:
+                sent_post, conf_post = "NEU", 0.5
 
-            # Analizar los comentarios
-            comentarios_detalle = []
-            sentimientos_comentarios = []
-            confianza_comentarios = []
+            # 2. Análisis de Comentarios
+            comentarios_procesados = []
+            sentimientos_comments = []
+            confianzas_comments = []
 
-            for comentario in post.get("comentarios", []):
-                texto_comentario = comentario.get("texto_comentario", "")
-                if not texto_comentario:
-                    continue
+            for com in post.get("comentarios", []):
+                txt_com = com.get("texto_comentario", "")
+                if not txt_com: continue
                 
-                # Agregar comentario al wordcloud general
-                todos_los_textos.append(texto_comentario)
-                    
+                todos_los_textos.append(txt_com)
+                
                 try:
-                    resultado_comentario = modelo([texto_comentario])[0]
-                    sentimiento_comentario = resultado_comentario["label"]
-                    confianza_comentario = round(resultado_comentario["score"], 3)
-                    
-                    sentimiento_comentario, confianza_comentario = analizar_texto_con_diccionario(
-                        texto_comentario, sentimiento_comentario, confianza_comentario
+                    res_com = modelo([txt_com])[0]
+                    sent_com, conf_com = analizar_texto_con_diccionario(
+                        txt_com, res_com["label"], res_com["score"]
                     )
-                    
-                except Exception as e:
-                    print(f"Error analizando comentario: {e}")
-                    sentimiento_comentario = "NEU"
-                    confianza_comentario = 0.5
-
-                comentarios_detalle.append({
-                    "id_comentario": comentario.get("id_comentario", f"comment_{len(comentarios_detalle)}"),
-                    "texto_comentario": texto_comentario,
-                    "sentimiento_comentario": sentimiento_comentario,
-                    "confianza_comentario": confianza_comentario
+                except:
+                    sent_com, conf_com = "NEU", 0.5
+                
+                comentarios_procesados.append({
+                    "id_comentario": com.get("id_comentario"),
+                    "texto_comentario": txt_com,
+                    "sentimiento_comentario": sent_com,
+                    "confianza_comentario": round(conf_com, 3)
                 })
+                sentimientos_comments.append(sent_com)
+                confianzas_comments.append(conf_com)
 
-                sentimientos_comentarios.append(sentimiento_comentario)
-                confianza_comentarios.append(confianza_comentario)
-
-            # Calcular sentimiento general de los comentarios
-            if sentimientos_comentarios:
-                avg_sentimiento_comentarios = max(set(sentimientos_comentarios), key=sentimientos_comentarios.count)
-                avg_confianza_comentarios = sum(confianza_comentarios) / len(confianza_comentarios)
+            # 3. Lógica de Sentimiento Final (Ponderado)
+            if sentimientos_comments:
+                avg_sent_comments = max(set(sentimientos_comments), key=sentimientos_comments.count)
+                avg_conf_comments = sum(confianzas_comments) / len(confianzas_comments)
             else:
-                avg_sentimiento_comentarios = "NEU"
-                avg_confianza_comentarios = 0.5
+                avg_sent_comments = "NEU"
+                avg_conf_comments = 0.5
 
-            # Sentimiento final combinado
-            if sentimiento_publicacion == "POS" and avg_sentimiento_comentarios == "POS":
-                sentimiento_final = "POS"
-            elif sentimiento_publicacion == "NEG" or avg_sentimiento_comentarios == "NEG":
-                sentimiento_final = "NEG"
+            # Si el post es NEG o los comentarios son mayormente NEG -> Final NEG
+            if sent_post == "NEG" or avg_sent_comments == "NEG":
+                sent_final = "NEG"
+            elif sent_post == "POS" and avg_sent_comments == "POS":
+                sent_final = "POS"
             else:
-                sentimiento_final = "NEU"
-
-            # Combinación de confianza
-            confianza_final = alpha * confianza_publicacion + (1 - alpha) * avg_confianza_comentarios
-
+                sent_final = "NEU"
+            
+            conf_final = alpha * conf_post + (1 - alpha) * avg_conf_comments
+            
             fecha = post.get("fecha", "")
             
+            usuario = post.get("usuario", "Anónimo")
+            
             publicaciones_procesadas.append({
-                "id_post": post.get("id_post", f"post_{len(publicaciones_procesadas)}"),
-                "candidato": post.get("candidato", "Sin candidato"),
-                "texto": texto_publicacion,
-                "sentimiento_publicacion": sentimiento_publicacion,
-                "confianza_publicacion": confianza_publicacion,
-                "comentarios": comentarios_detalle,
-                "sentimiento_comentarios": avg_sentimiento_comentarios,
-                "confianza_comentarios": round(avg_confianza_comentarios, 3),
-                "sentimiento_final": sentimiento_final,
-                "confianza_final": round(confianza_final, 3),
-                "fecha": fecha
+                "id_post": str(post.get("id_post")), # Aseguramos que coincida con la interface
+                "texto": texto_publicacion,          # CAMBIO: "text" -> "texto"
+                "usuario": usuario,                  # CAMBIO: Enviamos el usuario real (@JacoboG_Ecu)
+                "candidato": post.get("candidato"),  
+                "fecha": post.get("fecha"),
+                
+                "sentiment": sent_final,
+                "confidence": round(conf_final, 3),
+                "platform": "twitter",
+                "candidato": post.get("candidato"),
+                "comentarios": comentarios_procesados,
+                # Datos extra para el frontend si los necesita
+                "sentimiento_publicacion": sent_post,
+                "sentimiento_comentarios": avg_sent_comments,
+                "sentimiento_final": sent_final,
+                "confianza_final": round(conf_final, 3),
+                "comentarios": comentarios_procesados
             })
 
-        # Generar wordcloud general
         print("Generando wordclouds...")
-        wordcloud_general = generar_wordcloud(todos_los_textos)
-        wordclouds_por_sentimiento = generar_wordclouds_por_sentimiento(publicaciones_procesadas)
-
-
+        # Wordcloud General
+        wc_general, _ = generar_wordcloud(todos_los_textos)
         
-        response_data = {
+        # Wordclouds por sentimiento (POS, NEG, NEU)
+        wc_sentimientos = generar_wordclouds_por_sentimiento(publicaciones_procesadas)
+
+        return jsonify({
             "publicaciones": publicaciones_procesadas,
             "wordcloud": {
-            "general": wordcloud_general,
-            "por_sentimiento": wordclouds_por_sentimiento
+                "general": wc_general,
+                "por_sentimiento": wc_sentimientos
             },
             "total_textos_analizados": len(todos_los_textos)
-        }
-        
-        print(f"Publicaciones procesadas exitosamente: {len(publicaciones_procesadas)}")
-        return jsonify(response_data)
-        
+        })
+
     except Exception as e:
-        print(f"Error en endpoint /analizar: {e}")
-        return jsonify({"error": f"Error interno del servidor: {str(e)}"}), 500
+        print(f"ERROR CRITICO EN /analizar: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/conclusiones", methods=["POST"])
 def generar_conclusiones():
     try:
         datos = request.json
-        query = datos.get("query", "Consulta desconocida")
+        query = datos.get("query", "Consulta")
         wordclouds = datos.get("wordclouds", {})
         
+        # Construir resumen de palabras
+        top_pos = ", ".join(list(wordclouds.get("POS", {}).keys())[:5])
+        top_neg = ", ".join(list(wordclouds.get("NEG", {}).keys())[:5])
+        
         prompt = f"""
-        Eres un asistente experto en análisis sociopolítico. Dada la siguiente consulta: "{query}",
-        y las palabras más frecuentes por sentimiento:
-
-        - Positivas: {wordclouds.get("POS", "")}
-        - Negativas: {wordclouds.get("NEG", "")}
-        - Neutrales: {wordclouds.get("NEU", "")}
-
-        Redacta una conclusión clara y concisa en máximo 3 frases. Sé objetivo, evita repetir palabras, y
-        resume el tono general de la conversación.
+        Analiza brevemente la reputación digital de "{query}" basándote en estas palabras clave detectadas:
+        - Positivas: {top_pos if top_pos else "No detectadas"}
+        - Negativas: {top_neg if top_neg else "No detectadas"}
+        
+        Responde en 2 frases objetivas como analista de datos.
         """
-
-        respuesta = model_gemini.generate_content(prompt)
-        conclusion = respuesta.text.strip()
-
-        return jsonify({"conclusion": conclusion})
+        
+        try:
+            if model_gemini:
+                resp = model_gemini.generate_content(prompt)
+                return jsonify({"conclusion": resp.text.strip()})
+            else:
+                raise Exception("Modelo no configurado")
+        except Exception as ia_error:
+            print(f"Error IA: {ia_error}")
+            return jsonify({
+                "conclusion": "El análisis muestra tendencias mixtas. Se recomienda revisar los comentarios destacados para mayor contexto.",
+                "nota": "Generado localmente (IA no disponible)"
+            })
 
     except Exception as e:
-        print(f"Error generando conclusión: {e}")
-        return jsonify({"error": "No se pudo generar la conclusión."}), 500
+        return jsonify({"error": "Error generando conclusión"}), 500
 
 
 if __name__ == "__main__":
     print("Iniciando servidor Flask...")
+    
+    print("----- MODELOS DISPONIBLES -----")
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                print(m.name)
+    except Exception as e:
+        print(f"Error listando modelos: {e}")
+    print("-------------------------------")
+    # ----------------------------------------
+    
     print("Verificando modelo de ML...")
     
     # Verificar que el modelo funciona
