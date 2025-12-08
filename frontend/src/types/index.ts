@@ -56,3 +56,6 @@ export interface SearchFilters {
   platforms: ('twitter' | 'facebook' | 'instagram')[];
   minEngagement?: number;
 }
+
+
+export type ViewType = 'home' | 'how-it-works' | 'compare';
