@@ -23,15 +23,6 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading }) =
     }
   };
 
-  const handlePlatformToggle = (platform: 'twitter' | 'facebook' | 'instagram') => {
-    setFilters(prev => ({
-      ...prev,
-      platforms: prev.platforms.includes(platform)
-        ? prev.platforms.filter(p => p !== platform)
-        : [...prev.platforms, platform]
-    }));
-  };
-
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -95,34 +86,11 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading }) =
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Redes Sociales</label>
-          <div className="flex flex-wrap gap-3">
-            {[
-              { key: 'twitter' as const, label: 'Twitter', color: 'bg-blue-100 text-blue-800' },
-              { key: 'facebook' as const, label: 'Facebook', color: 'bg-indigo-100 text-indigo-800' },
-              { key: 'instagram' as const, label: 'Instagram', color: 'bg-pink-100 text-pink-800' }
-            ].map(({ key, label, color }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handlePlatformToggle(key)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                  filters.platforms.includes(key)
-                    ? color
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <button
           type="submit"
           disabled={isLoading || !filters.query.trim()}
-          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
         >
           {isLoading ? (
             <>

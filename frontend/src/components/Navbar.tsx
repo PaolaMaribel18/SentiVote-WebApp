@@ -24,7 +24,7 @@ export function Navbar({ activeView, onNavigate }: NavbarProps) {
           {/* Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => onNavigate('home')}>
             <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg">
-                  <FontAwesomeIcon icon={faPersonBooth} className="mr-2 text-white" />
+                  <FontAwesomeIcon icon={faPersonBooth} className=" text-white" />
             </div>
             <span className="text-gray-900">SentiVote Ec</span>
           </div>

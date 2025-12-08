@@ -8,6 +8,8 @@ import { SentimentChart } from './components/SentimentChart';
 import { ReportGenerator } from './components/ReportGenerator';
 import { SearchFilters, SentimentAnalysis, ViewType } from './types'; // Importar ViewType
 import { Footer } from './components/Footer';
+import { HowItWorksView } from './components/HowItWorksView';
+
 
 // Configuración de la API
 const API_BASE_URL = 'http://localhost:5000';
@@ -42,7 +44,7 @@ interface BackendResponse {
       NEG: { imagen: string; palabras: Record<string, number> } | null;
       NEU: { imagen: string; palabras: Record<string, number> } | null;
     };
-  }; 
+  };
   total_textos_analizados: number;
 }
 
@@ -97,7 +99,7 @@ function App() {
         const conclusionData = await conclusionResponse.json();
         const conclusionText = conclusionData.conclusion ?? null;
         setConclusion(conclusionText);
-        
+
         setCurrentAnalysis(convertBackendDataToFrontend(backendData.publicaciones, filters.query, conclusionText));
       } catch (error) {
         console.warn("No se pudo generar la conclusión automáticamente.", error);
@@ -118,73 +120,73 @@ function App() {
   };
 
   const convertBackendDataToFrontend = (backendData: BackendPost[], query: string, conclusion?: string | null): SentimentAnalysis => {
-      // (Lógica existente resumida para no extender el código...)
-      const allComments = backendData.flatMap(post => post.comentarios);
-      const totalPosts = backendData.length;
-      const totalComments = allComments.length;
-      const totalItems = totalPosts + totalComments;
+    // (Lógica existente resumida para no extender el código...)
+    const allComments = backendData.flatMap(post => post.comentarios);
+    const totalPosts = backendData.length;
+    const totalComments = allComments.length;
+    const totalItems = totalPosts + totalComments;
 
-      const postSentiments = {
-        positive: backendData.filter(post => post.sentimiento_publicacion === 'POS').length,
-        negative: backendData.filter(post => post.sentimiento_publicacion === 'NEG').length,
-        neutral: backendData.filter(post => post.sentimiento_publicacion === 'NEU').length
-      };
+    const postSentiments = {
+      positive: backendData.filter(post => post.sentimiento_publicacion === 'POS').length,
+      negative: backendData.filter(post => post.sentimiento_publicacion === 'NEG').length,
+      neutral: backendData.filter(post => post.sentimiento_publicacion === 'NEU').length
+    };
 
-      const commentSentiments = {
-        positive: allComments.filter(comment => comment.sentimiento_comentario === 'POS').length,
-        negative: allComments.filter(comment => comment.sentimiento_comentario === 'NEG').length,
-        neutral: allComments.filter(comment => comment.sentimiento_comentario === 'NEU').length
-      };
+    const commentSentiments = {
+      positive: allComments.filter(comment => comment.sentimiento_comentario === 'POS').length,
+      negative: allComments.filter(comment => comment.sentimiento_comentario === 'NEG').length,
+      neutral: allComments.filter(comment => comment.sentimiento_comentario === 'NEU').length
+    };
 
-      const totalSentiments = {
-        positive: postSentiments.positive + commentSentiments.positive,
-        negative: postSentiments.negative + commentSentiments.negative,
-        neutral: postSentiments.neutral + commentSentiments.neutral
-      };
+    const totalSentiments = {
+      positive: postSentiments.positive + commentSentiments.positive,
+      negative: postSentiments.negative + commentSentiments.negative,
+      neutral: postSentiments.neutral + commentSentiments.neutral
+    };
 
-      const dummyTweets = backendData.map(post => ({
-        id: post.id_post,
-        text: post.texto,
-        user: {
-          name: post.candidato,
-          username: post.candidato.toLowerCase().replace(/\s+/g, '_'),
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(post.candidato)}&background=random`
-        },
-        platform: 'twitter' as const,
-        sentiment: mapSentiment(post.sentimiento_final),
-        confidence: post.confianza_final,
-        engagement: {
-          likes: Math.floor(Math.random() * 1000) + 10,
-          retweets: Math.floor(Math.random() * 500) + 5,
-          replies: post.comentarios.length
-        },
-        createdAt: new Date().toISOString()
-      }));
+    const dummyTweets = backendData.map(post => ({
+      id: post.id_post,
+      text: post.texto,
+      user: {
+        name: post.candidato,
+        username: post.candidato.toLowerCase().replace(/\s+/g, '_'),
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(post.candidato)}&background=random`
+      },
+      platform: 'twitter' as const,
+      sentiment: post.sentimiento_final,
+      confidence: post.confianza_final,
+      engagement: {
+        likes: Math.floor(Math.random() * 1000) + 10,
+        retweets: Math.floor(Math.random() * 500) + 5,
+        replies: post.comentarios.length
+      },
+      createdAt: new Date().toISOString()
+    }));
 
-      const summary = {
-        total: totalItems,
-        positive: totalSentiments.positive,
-        negative: totalSentiments.negative,
-        neutral: totalSentiments.neutral,
-        uniqueUsers: {
-          positive: Math.floor(totalSentiments.positive * 0.8),
-          negative: Math.floor(totalSentiments.negative * 0.9),
-          neutral: Math.floor(totalSentiments.neutral * 0.85)
-        }
-      };
+    const summary = {
+      total: totalItems,
+      positive: totalSentiments.positive,
+      negative: totalSentiments.negative,
+      neutral: totalSentiments.neutral,
+      uniqueUsers: {
+        positive: Math.floor(totalSentiments.positive * 0.8),
+        negative: Math.floor(totalSentiments.negative * 0.9),
+        neutral: Math.floor(totalSentiments.neutral * 0.85)
+      }
+    };
 
-      return {
-        id: Date.now().toString(),
-        query: query,
-        createdAt: new Date().toISOString(),
-        tweets: dummyTweets,
-        summary: summary,
-        wordClouds: { positive: [], negative: [], neutral: [] },
-        comments: [],
-        conclusion: typeof conclusion === 'string' ? conclusion : String(conclusion)
-      };
+    return {
+      id: Date.now().toString(),
+      query: query,
+      createdAt: new Date().toISOString(),
+      tweets: dummyTweets,
+      summary: summary,
+      wordClouds: { positive: [], negative: [], neutral: [] },
+      comments: [],
+      conclusion: typeof conclusion === 'string' ? conclusion : String(conclusion)
+    };
   };
-
+/*
   const mapSentiment = (backendSentiment: string): 'positive' | 'negative' | 'neutral' => {
     switch (backendSentiment) {
       case 'POS': return 'positive';
@@ -192,14 +194,14 @@ function App() {
       default: return 'neutral';
     }
   };
-
+*/
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
       <Navbar activeView={activeView} onNavigate={setActiveView} />
 
       {/* Main Content Area */}
       <div className="max-w-7xl mx-auto px-4 py-8 flex-grow w-full">
-        
+
         {/* VISTA: HOME */}
         {activeView === 'home' && (
           <>
@@ -245,7 +247,7 @@ function App() {
                     </h3>
                     <div className="space-y-4">
                       {/* Métricas... (Se mantienen igual) */}
-                       <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
                         <span className="text-gray-600 flex items-center"><Globe className="w-4 h-4 mr-2" />Total de Publicaciones:</span>
                         <span className="font-semibold text-gray-900">{backendPosts.length}</span>
                       </div>
@@ -265,20 +267,57 @@ function App() {
                     </div>
                   </div>
                 )}
-                
-                {/* Wordclouds por sentimiento (Se mantiene igual...) */}
-                {wordcloudImage?.por_sentimiento && (
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                     {/* ... (renderizado de wordclouds positivo/negativo/neutro) */}
-                   </div>
-                )}
 
-                {conclusion && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">Conclusión del Análisis</h3>
-                    <p className="text-gray-700 text-lg text-center leading-relaxed whitespace-pre-line">{conclusion}</p>
+                {/* Wordclouds por Sentimiento */}
+                {wordcloudImage?.por_sentimiento && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                    {wordcloudImage.por_sentimiento.POS && (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <h4 className="text-lg font-semibold text-green-600 text-center mb-2">Palabras Positivas</h4>
+                        <img
+                          src={`data:image/png;base64,${wordcloudImage.por_sentimiento.POS?.imagen ?? ''}`}
+                          alt="Nube de palabras positivas"
+                          className="max-w-full h-auto mx-auto rounded-md shadow"
+                        />
+                      </div>
+                    )}
+                    {wordcloudImage.por_sentimiento.NEG && (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <h4 className="text-lg font-semibold text-red-600 text-center mb-2">Palabras Negativas</h4>
+                        <img
+                          src={`data:image/png;base64,${wordcloudImage.por_sentimiento.NEG?.imagen ?? ''}`}
+                          alt="Nube de palabras positivas"
+                          className="max-w-full h-auto mx-auto rounded-md shadow"
+                        />
+                      </div>
+                    )}
+                    {wordcloudImage.por_sentimiento.NEU && (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <h4 className="text-lg font-semibold text-gray-600 text-center mb-2">Palabras Neutrales</h4>
+                        <img
+                          src={`data:image/png;base64,${wordcloudImage.por_sentimiento.NEU?.imagen ?? ''}`}
+                          alt="Nube de palabras neutrales"
+                          className="max-w-full h-auto mx-auto rounded-md shadow"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
+                {/* Conclusión del Análisis */}
+                {conclusion && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+                      Conclusión del Análisis
+                    </h3>
+                    <p className="text-gray-700 text-lg text-center leading-relaxed whitespace-pre-line">
+                      {conclusion}
+                    </p>
+                    <p className="text-xs text-gray-500 italic mt-2">
+                      * Esta conclusión fue generada automáticamente por un modelo de lenguaje (Gemini Flash 2.0).
+                    </p>
+                  </div>
+                )}
+
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 h-[611.25px] flex flex-col">
@@ -306,10 +345,7 @@ function App() {
 
         {/* VISTA: CÓMO FUNCIONA (Placeholder) */}
         {activeView === 'how-it-works' && (
-          <div className="text-center py-16">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Cómo Funciona</h2>
-            <p className="text-gray-600">Aquí irá la explicación del modelo y la metodología.</p>
-          </div>
+          <HowItWorksView />
         )}
 
         {/* VISTA: COMPARAR (Placeholder) */}
