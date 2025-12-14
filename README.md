@@ -1,35 +1,48 @@
 # 🗳️ SentiVote-WebApp – Análisis de Sentimiento de Opiniones Electorales
 
-SentiVote es una aplicación web que permite analizar el sentimiento de opiniones sobre candidatos electorales, usando datos de redes sociales. Utiliza un modelo de NLP entrenado en español (BETO) para clasificar los tweets como positivos, negativos o neutrales.
+SentiVote es una aplicación web que permite analizar el sentimiento de opiniones sobre candidatos electorales, usando datos de redes sociales. Utiliza un modelo de lenguaje BERT preentrenado en español (pysentimiento/robertuito) ajustado (fine-tuned) con un corpus político específico, y lo combina con un sistema de refuerzo basado en diccionarios temáticos (Manejo de Negación) para ofrecer mayor precisión en el dominio electoral.
 
 ---
 
 ## 📁 Estructura del Proyecto
 
-    SentiVote-WebApp/
-    │
-    ├── backend/                  # Servidor Flask y modelo de análisis de sentimiento
-    │   ├── app.py
-    │   └── ../data/              # Tweets en formato JSON
-    │       └── corpus_completo.json
-    │
-    ├── frontend/                 # Aplicación React
-    │   ├── src/
-    │   │   ├── components/
-    |   |   ├──types
-    │   │   └── App.jsx
-    │   └── package.json
-    │
-    └── README.md                 # Este archivo
-
+SentiVote-WebApp/
+│
+├── backend/                          # API Flask, Lógica Híbrida (Diccionario + ML)
+│   ├── data/
+│   │   └── corpus.json               # Corpus consolidado de publicaciones y comentarios
+│   └── main.py                       # Servidor Flask y Lógica de Análisis
+│
+├── fineTuning/                       # Scripts y modelo para el Fine-Tuning
+│   ├── modelo_final/                 # Modelo fine-tuned guardado (Robertuito/BETO)
+│   └── finetuning.ipynb              # Notebook de entrenamiento
+│
+├── frontend/                         # Aplicación Web (React/TypeScript)
+│   ├── src/
+│   │   ├── components/               # Componentes React (Formularios, Tweets, Gráficos)
+│   │   └── App.tsx                   # Componente Principal
+│   └── package.json
+│
+├── webScraping/                      # Scripts de recolección y pre-procesamiento
+│   └── ...                           # Scripts de Python
+│
+└── README.md
 ---
 
 ## 🚀 Instalación y Ejecución
 
 ### 🖥️ Frontend (React)
 
+#### Navega a la carpeta del frontend:
+
     cd frontend
+
+#### Instala las dependencias:
+
     npm install
+
+#### Ejecuta la aplicación:
+
     npm run dev
 
 La app se ejecutará por defecto en: http://localhost:5173
@@ -60,4 +73,8 @@ El backend estará activo en: http://localhost:5000
 
 ---
 
-> ✅ Asegúrate de que el archivo `corpus_data.json` esté ubicado en la carpeta `data/` al mismo nivel del backend.
+✅ IMPORTANTE:
+
+Asegúrate de que el modelo fine-tuned esté ubicado en backend/fineTuning/modelo_final.
+
+Asegúrate de que el archivo corpus.json esté en backend/data/.
