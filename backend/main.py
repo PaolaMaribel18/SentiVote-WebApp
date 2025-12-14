@@ -1,22 +1,38 @@
-from flask import Flask, request, jsonify, send_file
-from transformers import pipeline
-from flask_cors import CORS
 import os
 import json
-from datetime import datetime
+import re
 import io
 import base64
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('Agg')  # Para evitar problemas con GUI
-import re
-import google.generativeai as genai
+
+# Librerías de Machine Learning / NLP
+from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification 
+import nltk
+from nltk.corpus import stopwords
+
+# Librerías de la Web (Flask)
+from flask import Flask, request, jsonify # Eliminamos 'send_file' si no se usa
+from flask_cors import CORS
 from dotenv import load_dotenv
 
+# Librerías de Visualización
+import matplotlib
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+matplotlib.use('Agg') # Para evitar problemas con GUI
+
+# Librerías de LLM
+import google.generativeai as genai 
+
+from datetime import datetime, timezone 
+# --------------------------------------------------------------------------------
+
+
+# Configurar variables de entorno
 load_dotenv()
 
-# --- CORRECCIÓN 1: Nombre del modelo estable ---
+# ---------------------------------------------------------------------------------------------------
+# Configurar Gemini 2.5 Flash de Google Generative AI API 
+# ---------------------------------------------------------------------------------------------------
 api_key = os.getenv("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
@@ -25,55 +41,113 @@ else:
     print("⚠️ ADVERTENCIA: No se encontró GEMINI_API_KEY en .env")
     model_gemini = None
 
+# ---------------------------------------------------------------------------------------------------
+# Configurar Flask y CORS
+# ---------------------------------------------------------------------------------------------------
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173", "http://localhost:3000"])
 
-# Cargar modelo de análisis de sentimiento
+# ---------------------------------------------------------------------------------------------------
+# Cargar modelo de análisis de sentimiento BETO desde Hugging Face
+# ---------------------------------------------------------------------------------------------------
+# try:
+#     modelo = pipeline("sentiment-analysis", model="finiteautomata/beto-sentiment-analysis")
+#     print("Modelo BETO cargado exitosamente")
+# except Exception as e:
+#     print(f"Error cargando modelo BETO: {e}")
+#     print("Usando modelo alternativo...")
+#     modelo = pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
+    
+    
+# ---------------------------------------------------------------------------------------------------
+# Cargar modelo de análisis de sentimiento fine-tuned localmente
+# ---------------------------------------------------------------------------------------------------
+
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "fineTuning", "modelo_final")
+
 try:
-    modelo = pipeline("sentiment-analysis", model="finiteautomata/beto-sentiment-analysis")
-    print("Modelo BETO cargado exitosamente")
+    print(f"Intentando cargar modelo fine-tuned desde: {MODEL_DIR}")
+    modelo = pipeline(
+        "sentiment-analysis", 
+        model=MODEL_DIR, 
+        device=-1, # -1 para usar CPU, 0 para usar GPU 
+        truncation=True,
+        max_length=128 #Mejorar modelo para que acepte textos más largos
+    )
+    print("Modelo fine-tuned 'sentimiento-politica' cargado exitosamente.")
+
 except Exception as e:
-    print(f"Error cargando modelo BETO: {e}")
-    print("Usando modelo alternativo...")
-    modelo = pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
+    print(f"ERROR: No se pudo cargar el modelo fine-tuned local: {e}")
+    # Fallback al modelo de Hugging Face por si falla la carga local
+    print("Usando modelo pre-entrenado alternativo como fallback...")
+    try:
+        modelo = pipeline("sentiment-analysis", model="finiteautomata/beto-sentiment-analysis")
+        print("Modelo BETO de Hugging Face cargado como fallback.")
+    except Exception as e_fallback:
+        print(f"ERROR: No se pudo cargar ningún modelo. {e_fallback}")
+        modelo = None # Si todo falla, no hay modelo.
+# ---------------------------------------------------------------------------------------------------
+    
+    
 
 # Diccionarios
 diccionario_positivo = [
-    "bueno", "excelente", "positivo", "genial", "amor", "éxito", "feliz", "maravilloso", 
+    # Términos generales de alta carga
+    "bueno", "excelente", "genial", "amor", "éxito", "feliz", "maravilloso", 
     "fortaleza", "esperanza", "progreso", "desarrollo", "bienestar", "paz", "justicia",
-    "honesto", "transparente", "eficiente", "competente", "liderazgo", "experiencia", "ganar", "vamos"
+    "honesto", "transparente", "eficiente", "competente", "liderazgo", "experiencia", "ganar", "vamos",
+    
+    # Términos especializados en política y agenda ecuatoriana
+    "seguridad", "protección", "firmeza", "orden", "estabilidad", "futuro", "empleo", 
+    "oportunidad", "inversión", "crecimiento", "salud", "educación", "libertad", 
+    "consenso", "patria", "unión", "solución", "seriedad", "propuestas", "calma", 
+    "mano dura"
 ]
 
 diccionario_negativo = [
+    # Términos generales de alta carga
     "malo", "horrible", "negativo", "terrible", "odio", "fracaso", "débil", "miseria", 
     "desastre", "corrupción", "mentira", "robo", "incompetente", "ineficiente", "crisis",
-    "problema", "conflicto", "violencia", "inseguridad", "pobreza", "desempleo", "ladron", "narco"
+    "problema", "conflicto", "violencia", "inseguridad", "pobreza", "desempleo", "ladron", "narco",
+    
+    # Términos especializados en política y agenda ecuatoriana
+    "sicariato", "extorsión", "impunidad", "bandas", "crimen", "cárcel", "caos",
+    "deuda", "impuestos", "alza", "carestía", "deficit", "quiebra", "fraude", 
+    "populismo", "traidor", "incumplimiento", "montaje", "juicio", "asamblea",
+    "engaño", "burla", "desconfianza", "cínico", "cúpula"
 ]
 
-STOP_WORDS_ES = {
-    'el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 
-    'da', 'su', 'por', 'son', 'con', 'para', 'al', 'del', 'los', 'las', 'una', 'pero', 
-    'sus', 'has', 'han', 'muy', 'más', 'yo', 'me', 'mi', 'tu', 'él', 'ella', 'este', 
-    'esta', 'si', 'ya', 'así', 'como', 'hasta', 'tiene', 'será', 'fue', 'ser', 'está', 
-    'van', 'son', 'hacer', 'ver', 'ir', 'hay', 'bien', 'ahora', 'donde', 'cuando', 
-    'después', 'antes', 'tanto', 'todos', 'todo', 'cada', 'puede', 'debe', 'sobre', 
-    'sin', 'desde', 'hacia', 'entre', 'porque', 'aunque', 'mientras', 'durante', 
-    'según', 'contra', 'tras', 'mediante', 'ante', 'bajo', 'qué', 'cómo', 'cuál', 
-    'dónde', 'cuándo', 'por', 'solo', 'también', 'vez', 'hacer', 'ahí', 'estar', 
-    'tener', 'poder', 'decir', 'ver', 'dar', 'saber', 'querer', 'llegar', 'pasar', 
-    'seguir', 'parecer', 'encontrar', 'llamar', 'venir', 'pensar', 'salir', 'volver', 
-    'tomar', 'conocer', 'vivir', 'sentir', 'tratar', 'mirar', 'contar', 'empezar', 
-    'esperar', 'buscar', 'existir', 'entrar', 'trabajar', 'escribir', 'producir', 
-    'ocurrir', 'recibir', 'cambiar', 'resultar', 'situar', 'reconocer', 'estudiar', 
-    'obtener', 'nacer', 'permanecer', 'escuchar', 'realizar', 'suponer', 'disponer', 
-    'poner', 'hablar', 'considerar', 'explicar', 'dedicar', 'construir', 'ganar', 
-    'brindar', 'ofrecer', 'conseguir', 'mantener', 'presentar', 'crear', 'abrir', 
-    'recordar', 'utilizar', 'cerrar', 'mostrar', 'incluir', 'continuar', 'desenvolver',
-    'rt', 'via', 'https', 'http', 'www', 'com', 'co', 'ec', 'org'
+NEGATORS = {
+    "no", "ni", "nunca", "jamás", "tampoco", "sin", "excepto", "salvo", "ni siquiera"
 }
 
-alpha = 0.4
+# --------------------------------------------------------------------------------------
+# Carga de Stop Words desde NLTK + Términos Específicos 
+# --------------------------------------------------------------------------------------
 
+# 1. Cargar las stop words estándar en español de NLTK
+try:
+    NLTK_STOP_WORDS = set(stopwords.words('spanish'))
+except LookupError:
+    # Esto ocurre si el paquete 'stopwords' no se descargó (Paso 1.B)
+    print("⚠️ ADVERTENCIA: NLTK 'stopwords' no está descargado. Ejecute 'nltk.download(\\'stopwords\\')'")
+    NLTK_STOP_WORDS = set()
+
+# 2. Palabras específicas de tu dominio (redes sociales y URLs)
+CUSTOM_STOP_WORDS = {
+    'rt', 'via', 'https', 'http', 'www', 'com', 'co', 'ec', 'org'
+    # Las palabras del diccionario manual que quitaste están ahora en NLTK
+}
+
+# 3. Combinar y usar el nuevo conjunto robusto
+STOP_WORDS_ES = NLTK_STOP_WORDS.union(CUSTOM_STOP_WORDS)
+print(f"INFO: Lista de Stop Words cargada con {len(STOP_WORDS_ES)} términos (NLTK + Personalizados).")
+
+alpha = 0.4
+# --------------------------------------------------------------------------------------
+# Funciones auxiliares
+# --------------------------------------------------------------------------------------
+# Función para limpiar texto para wordcloud y análisis 
 def limpiar_texto_para_wordcloud(texto):
     """Limpia el texto para el wordcloud"""
     if not texto: return ""
@@ -85,6 +159,7 @@ def limpiar_texto_para_wordcloud(texto):
     texto = re.sub(r'\s+', ' ', texto).strip()
     return texto.lower()
 
+# Función para generar wordcloud y devolver imagen en base64 y palabras frecuentes 
 def generar_wordcloud(textos):
     """Genera un wordcloud a partir de una lista de textos"""
     try:
@@ -157,6 +232,7 @@ def generar_wordclouds_por_sentimiento(publicaciones):
 
     return wordclouds_sentimiento
 
+# Cargar corpus desde archivo JSON 
 def cargar_corpus():
     ruta = os.path.join(os.path.dirname(__file__), "data/corpus.json") 
     try:
@@ -166,38 +242,140 @@ def cargar_corpus():
         print("ERROR: Archivo corpus.json no encontrado")
         return []
 
+# --------------------------------------------------------------------------------------
+# FUNCIÓN DE ANÁLISIS DE DICCIONARIO MEJORADA CON MANEJO DE NEGACIÓN
+# --------------------------------------------------------------------------------------
 def analizar_texto_con_diccionario(texto, sentimiento_modelo, confianza_modelo):
+    """
+    Analiza el texto buscando palabras clave para reforzar la confianza del modelo,
+    con manejo básico de negación.
+    """
     texto_lower = texto.lower()
-    palabras_positivas = sum(1 for palabra in diccionario_positivo if palabra in texto_lower)
-    palabras_negativas = sum(1 for palabra in diccionario_negativo if palabra in texto_lower)
     
-    if palabras_positivas > palabras_negativas and palabras_positivas > 0:
-        return "POS", min(confianza_modelo + 0.15, 1.0) # Aumentamos peso al diccionario
-    elif palabras_negativas > palabras_positivas and palabras_negativas > 0:
+    # 1. Limpieza y Tokenización del texto de entrada
+    # Limpiamos solo para obtener palabras, pero mantenemos el orden para la negación.
+    words = re.findall(r'\b\w+\b', texto_lower)
+    
+    palabras_positivas_contadas = 0
+    palabras_negativas_contadas = 0
+    
+    for i, word in enumerate(words):
+        # 2. Revisar si la palabra está negada
+        # Buscamos si la palabra anterior (índice i-1) es un negador.
+        is_negated = False
+        if i > 0 and words[i-1] in NEGATORS:
+            is_negated = True
+        
+        # 3. Aplicar la lógica de sentimiento
+        if word in diccionario_positivo:
+            if not is_negated:
+                palabras_positivas_contadas += 1
+            # Si se niega ("no bueno"), no cuenta como positivo, sino como neutral.
+            
+        elif word in diccionario_negativo:
+            if not is_negated:
+                palabras_negativas_contadas += 1
+            # Si se niega ("no corrupción"), no cuenta como negativo, sino como neutral.
+            
+    # 4. Decisión de Refuerzo
+    if palabras_positivas_contadas > palabras_negativas_contadas and palabras_positivas_contadas > 0:
+        # Si el modelo base predijo algo negativo o neutro, le damos un empujón positivo.
+        return "POS", min(confianza_modelo + 0.15, 1.0) 
+        
+    elif palabras_negativas_contadas > palabras_positivas_contadas and palabras_negativas_contadas > 0:
+        # Si el modelo base predijo algo positivo o neutro, le damos un empujón negativo.
         return "NEG", min(confianza_modelo + 0.15, 1.0)
+        
     else:
+        # Si no hay palabras clave o si se anularon por negación, confiamos en el modelo de Deep Learning.
         return sentimiento_modelo, confianza_modelo
 
+
+def parse_date(date_str, is_end=False):
+    """
+    Convierte una cadena de fecha (YYYY-MM-DD) en un objeto datetime aware (UTC), 
+    ajustando a los límites del día.
+    """
+    if not date_str:
+        return None
+    try:
+        # 1. Parsear la fecha simple YYYY-MM-DD
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        
+        # 2. Asignar explícitamente la zona horaria UTC (CRUCIAL para 'offset-aware')
+        dt = dt.replace(tzinfo=timezone.utc) 
+        
+    except ValueError:
+        print(f"Advertencia: Formato de fecha de filtro inesperado para {date_str}")
+        return None
+    
+    # 3. Ajustar a los límites del día (00:00:00 o 23:59:59)
+    if not is_end:
+        return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        # Nota: Usamos 23:59:59.999999 para incluir todo el día
+        return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+def obtener_rango_fechas(corpus):
+    """Calcula la fecha mínima y máxima del corpus."""
+    if not corpus:
+        return None, None
+    
+    fechas = []
+    
+    for post in corpus:
+        date_str = post.get("fecha")
+        if date_str:
+            try:
+                # Usamos el mismo método robusto que en /analizar
+                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                fechas.append(dt)
+            except ValueError:
+                continue # Ignoramos fechas inválidas
+    
+    if not fechas:
+        return None, None
+        
+    # Encontramos la fecha más antigua y la más reciente
+    min_date = min(fechas)
+    max_date = max(fechas)
+    
+    # Formateamos las fechas al formato simple YYYY-MM-DD para el frontend
+    # Nota: Usamos el formato ISO completo si es necesario, pero YYYY-MM-DD es suficiente para el selector
+    return min_date.strftime("%Y-%m-%d"), max_date.strftime("%Y-%m-%d")
+
+# --------------------------------------------------------------------------------------
+# Rutas de la API
+# --------------------------------------------------------------------------------------
+# Ruta raíz 
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"mensaje": "API Activa", "endpoints": ["/analizar", "/conclusiones"]})
 
+# Ruta de salud
 @app.route("/salud", methods=["GET"])
 def salud():
     corpus = cargar_corpus()
+    min_date_str, max_date_str = obtener_rango_fechas(corpus) # <--- Llamada a la nueva función
+    
     return jsonify({
         "estado": "activo",
         "publicaciones": len(corpus),
-        "modelos": "Gemini 1.5 Flash + BETO"
+        "modelos": "Gemini 2.5 Flash + Robertuito Electoral FT",
+        "minDate": min_date_str, # <--- ¡Nuevo campo!
+        "maxDate": max_date_str  # <--- ¡Nuevo campo!
     })
-
+    
+    
+# Ruta para análisis de sentimiento 
 @app.route("/analizar", methods=["POST"])
 def analizar():
+    # Procesar solicitud de análisis de sentimiento 
     try:
         datos = request.json
         query = datos.get("query", "").strip()
-        fecha_desde = datos.get("dateFrom")
-        fecha_hasta = datos.get("dateTo")
+        fecha_desde_str = datos.get("dateFrom")
+        fecha_hasta_str = datos.get("dateTo")
         
         if not query:
             return jsonify({"error": "Query requerida"}), 400
@@ -205,17 +383,56 @@ def analizar():
         print(f"Búsqueda recibida: '{query}'")
         corpus = cargar_corpus()
         
-        # Filtrado simple
-        publicaciones_filtradas = [
+        start_date = parse_date(fecha_desde_str, is_end=False)
+        end_date = parse_date(fecha_hasta_str, is_end=True)
+        
+        if not query:
+            return jsonify({"error": "Query requerida"}), 400
+        
+        print(f"Búsqueda recibida: '{query}'")
+        corpus = cargar_corpus()
+        
+        # 1. PARSEO DE FECHAS DE ENTRADA
+        start_date = parse_date(fecha_desde_str, is_end=False)
+        end_date = parse_date(fecha_hasta_str, is_end=True)
+        
+        # 2. FILTRADO INICIAL POR QUERY (Mantener la funcionalidad actual)
+        publicaciones_filtradas_por_query = [
             p for p in corpus 
             if query.lower() in p.get("candidato", "").replace("_", " ").lower() or 
             query.lower() in p.get("texto", "").lower()
         ]
         
-        # Filtrar por fecha si es necesario (Implementación básica)
-        if fecha_desde or fecha_hasta:
-            # Aquí iría lógica de fecha si el string coincide
-            pass
+        # 3. FILTRADO POR FECHA (Lógica Completada)
+        publicaciones_filtradas = []
+        
+        if start_date or end_date:
+            print(f"Aplicando filtro de fecha: Desde {start_date} hasta {end_date}")
+            for p in publicaciones_filtradas_por_query:
+                post_date_str = p.get("fecha") # Asume el formato ISO del corpus (ej. 2025-01-05T17:57:48.000Z)
+                if not post_date_str:
+                    continue
+                
+                # CORRECCIÓN CLAVE: Asegurar que la fecha del corpus sea consciente de la zona horaria.
+                try:
+                    # fromisoformat es la mejor opción para formatos ISO con Z (lo convierte a +00:00)
+                    post_date = datetime.fromisoformat(post_date_str.replace('Z', '+00:00'))
+                    
+                    # SI el corpus no tiene Z o +00:00, hay que forzarlo, pero fromisoformat generalmente lo maneja.
+                    # Si el error persiste, deberíamos forzar: post_date = post_date.replace(tzinfo=timezone.utc)
+                    
+                except ValueError:
+                    # Si el formato no es válido, lo ignoramos.
+                    continue 
+
+                is_within_start = (not start_date) or (post_date >= start_date)
+                is_within_end = (not end_date) or (post_date <= end_date)
+                
+                if is_within_start and is_within_end:
+                    publicaciones_filtradas.append(p)
+        else:
+            # Si no hay filtros de fecha, se mantienen solo los filtrados por query
+            publicaciones_filtradas = publicaciones_filtradas_por_query
 
         print(f"Publicaciones encontradas: {len(publicaciones_filtradas)}")
         
@@ -224,6 +441,7 @@ def analizar():
 
         publicaciones_procesadas = []
         todos_los_textos = [] 
+        # Procesar cada publicación 
         
         for post in publicaciones_filtradas:
             texto_publicacion = post.get("texto", "")
@@ -234,16 +452,42 @@ def analizar():
             # 1. Análisis del Post
             try:
                 res_post = modelo([texto_publicacion])[0]
+                
+                # Almacenar resultado PURO del modelo FT (antes del diccionario)
+                raw_post_sentiment = res_post["label"].upper().replace("NEGATIVE", "NEG").replace("POSITIVE", "POS").replace("NEUTRAL", "NEU")
+                raw_post_confidence = res_post["score"]
+                
+                # Aplicar Normalización y Refuerzo del Diccionario
+                normalized_label = raw_post_sentiment
                 sent_post, conf_post = analizar_texto_con_diccionario(
-                    texto_publicacion, res_post["label"], res_post["score"]
+                    texto_publicacion, normalized_label, raw_post_confidence
                 )
             except:
+                raw_post_sentiment = "NEU (Error)"
+                raw_post_confidence = 0.0
                 sent_post, conf_post = "NEU", 0.5
+            
+            # -------------------------------------------------------------
+            # >>> IMPRESIÓN DE COMPARACIÓN DEL POST <<<
+            # -------------------------------------------------------------
+            # print(f"\n--- POST: {post.get('id_post', 'N/A')} ---")
+            # print(f"Texto: '{texto_publicacion[:100]}...'")
+            # print(f"  [1] Modelo FT Puro: {raw_post_sentiment} (Confianza: {raw_post_confidence:.3f})")
+            # print(f"  [2] Híbrido Reforzado: {sent_post} (Confianza: {conf_post:.3f})")
+            
+            # Solo muestra el mensaje si hubo un cambio significativo
+            # if raw_post_sentiment != sent_post or abs(raw_post_confidence - conf_post) > 0.01:
+            #      print("  >>> POST REFORZADO/AJUSTADO por Diccionario/Negación <<<")
+            # -------------------------------------------------------------
+
 
             # 2. Análisis de Comentarios
             comentarios_procesados = []
             sentimientos_comments = []
             confianzas_comments = []
+            
+            # >>> IMPRESIÓN DE COMENTARIOS (Opcional, activa solo para depuración profunda) <<<
+            # print(f"\n   --- Comentarios del Post {post.get('id_post')} ---") 
 
             for com in post.get("comentarios", []):
                 txt_com = com.get("texto_comentario", "")
@@ -253,11 +497,25 @@ def analizar():
                 
                 try:
                     res_com = modelo([txt_com])[0]
+                    
+                    # Resultado PURO del modelo FT
+                    raw_com_sentiment = res_com["label"].upper().replace("NEGATIVE", "NEG").replace("POSITIVE", "POS").replace("NEUTRAL", "NEU")
+                    raw_com_confidence = res_com["score"]
+                    
+                    # Aplicar Normalización y Refuerzo del Diccionario
+                    normalized_label_com = raw_com_sentiment
                     sent_com, conf_com = analizar_texto_con_diccionario(
-                        txt_com, res_com["label"], res_com["score"]
+                        txt_com, normalized_label_com, raw_com_confidence
                     )
                 except:
+                    raw_com_sentiment = "NEU (Error)"
+                    raw_com_confidence = 0.0
                     sent_com, conf_com = "NEU", 0.5
+                
+                # >>> IMPRESIÓN DE COMPARACIÓN DEL COMENTARIO (Descomentar para ver) <<<
+                # if raw_com_sentiment != sent_com or abs(raw_com_confidence - conf_com) > 0.01:
+                #     print(f"     [!] Comentario ajustado: '{txt_com[:50]}...'")
+                #     print(f"         Puro: {raw_com_sentiment} ({raw_com_confidence:.3f}) -> Híbrido: {sent_com} ({conf_com:.3f})")
                 
                 comentarios_procesados.append({
                     "id_comentario": com.get("id_comentario"),
@@ -292,9 +550,9 @@ def analizar():
             
             publicaciones_procesadas.append({
                 "id_post": str(post.get("id_post")), # Aseguramos que coincida con la interface
-                "texto": texto_publicacion,          # CAMBIO: "text" -> "texto"
-                "usuario": usuario,                  # CAMBIO: Enviamos el usuario real (@JacoboG_Ecu)
-                "candidato": post.get("candidato"),  
+                "texto": texto_publicacion, # CAMBIO: "text" -> "texto"
+                "usuario": usuario, # CAMBIO: Enviamos el usuario real (@JacoboG_Ecu)
+                "candidato": post.get("candidato"), 
                 "fecha": post.get("fecha"),
                 
                 "sentiment": sent_final,
@@ -310,7 +568,7 @@ def analizar():
                 "comentarios": comentarios_procesados
             })
 
-        print("Generando wordclouds...")
+        print("\nGenerando wordclouds...")
         # Wordcloud General
         wc_general, _ = generar_wordcloud(todos_los_textos)
         
@@ -332,6 +590,7 @@ def analizar():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+# Ruta para generar conclusiones 
 @app.route("/conclusiones", methods=["POST"])
 def generar_conclusiones():
     try:
@@ -371,16 +630,6 @@ def generar_conclusiones():
 if __name__ == "__main__":
     print("Iniciando servidor Flask...")
     
-    print("----- MODELOS DISPONIBLES -----")
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                print(m.name)
-    except Exception as e:
-        print(f"Error listando modelos: {e}")
-    print("-------------------------------")
-    # ----------------------------------------
-    
     print("Verificando modelo de ML...")
     
     # Verificar que el modelo funciona
@@ -396,5 +645,11 @@ if __name__ == "__main__":
         print(f"Corpus cargado: {len(corpus_test)} publicaciones")
     else:
         print("ADVERTENCIA: No se pudo cargar el corpus")
+    
+    #verificar rango de fechas
+    min_date_str, max_date_str = obtener_rango_fechas(corpus_test)
+    print(f"Rango de fechas del corpus: {min_date_str} a {max_date_str}")
+    
+
     
     app.run(debug=True, host='0.0.0.0', port=5000)
