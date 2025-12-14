@@ -5,7 +5,6 @@ SentiVote es una aplicación web que permite analizar el sentimiento de opinione
 ---
 
 ## 📁 Estructura del Proyecto
-
 SentiVote-WebApp/
 │
 ├── backend/                          # API Flask, Lógica Híbrida (Diccionario + ML)
