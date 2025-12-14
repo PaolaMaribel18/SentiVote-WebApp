@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BarChart3, Brain, Globe, Users } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BarChart3, Brain, Calendar, Globe, Users } from 'lucide-react';
 import { Navbar } from './components/Navbar'; // Importar Navbar
 import { SearchForm } from './components/SearchForm';
 import { SentimentCard } from './components/SentimentCard';
@@ -33,6 +33,7 @@ interface BackendPost {
   confianza_comentarios: number;
   sentimiento_final: 'POS' | 'NEG' | 'NEU';
   confianza_final: number;
+  usuario: string;
 }
 
 interface BackendResponse {
@@ -47,6 +48,22 @@ interface BackendResponse {
   };
   total_textos_analizados: number;
 }
+// En la sección de interfaces de App.tsx (junto a BackendPost, BackendResponse, etc.)
+
+interface BackendHealthResponse {
+  estado: string;
+  publicaciones: number;
+  modelos: string;
+  minDate: string; // Recibido como "YYYY-MM-DD"
+  maxDate: string; // Recibido como "YYYY-MM-DD"
+}
+
+export interface CorpusDateRange {
+  min: Date | null;
+  max: Date | null;
+  minString: string | '';
+  maxString: string | '';
+}
 
 function App() {
   // Estado para la navegación
@@ -58,8 +75,34 @@ function App() {
   const [wordcloudImage, setWordcloudImage] = useState<BackendResponse['wordcloud'] | null>(null);
   const [conclusion, setConclusion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [corpusDateRange, setCorpusDateRange] = useState<CorpusDateRange>({ min: null, max: null, minString: '', maxString: '' });
 
-  // ... (Funciones handleSearch, convertBackendDataToFrontend y mapSentiment se mantienen idénticas)
+  const fetchCorpusMetadata = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/salud`);
+      const data: BackendHealthResponse = await response.json();
+
+      if (data.minDate && data.maxDate) {
+        // Parseamos las strings a objetos Date para validaciones internas
+        const minDateObj = new Date(data.minDate + 'T00:00:00');
+        const maxDateObj = new Date(data.maxDate + 'T23:59:59');
+
+        setCorpusDateRange({
+          min: minDateObj,
+          max: maxDateObj,
+          minString: data.minDate, // <-- USAMOS EL STRING DEL BACKEND
+          maxString: data.maxDate  // <-- USAMOS EL STRING DEL BACKEND
+        });
+      }
+    } catch (error) {
+      console.error("No se pudo obtener el rango de fechas del corpus:", error);
+    }
+  };
+  // USAR useEffect: Llama a la función al montar el componente
+  useEffect(() => {
+    fetchCorpusMetadata();
+  }, []); // El array vacío asegura que se ejecute solo una vez al cargar
+
   const handleSearch = async (filters: SearchFilters) => {
     setIsLoading(true);
     setError(null);
@@ -186,15 +229,15 @@ function App() {
       conclusion: typeof conclusion === 'string' ? conclusion : String(conclusion)
     };
   };
-/*
-  const mapSentiment = (backendSentiment: string): 'positive' | 'negative' | 'neutral' => {
-    switch (backendSentiment) {
-      case 'POS': return 'positive';
-      case 'NEG': return 'negative';
-      default: return 'neutral';
-    }
-  };
-*/
+  /*
+    const mapSentiment = (backendSentiment: string): 'positive' | 'negative' | 'neutral' => {
+      switch (backendSentiment) {
+        case 'POS': return 'positive';
+        case 'NEG': return 'negative';
+        default: return 'neutral';
+      }
+    };
+  */
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
       <Navbar activeView={activeView} onNavigate={setActiveView} />
@@ -216,7 +259,29 @@ function App() {
               </p>
             </header>
 
-            <SearchForm onSearch={handleSearch} isLoading={isLoading} />
+            <SearchForm
+              onSearch={handleSearch}
+              isLoading={isLoading}
+              dateRange={corpusDateRange}
+            />
+            {/* ------------------------------------------------------------------ */}
+            {/* NEW: Disclaimer sobre el rango de fechas */}
+            {/* ------------------------------------------------------------------ */}
+            {corpusDateRange.minString && corpusDateRange.maxString && !isLoading && (
+              <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 mb-8 rounded-lg shadow-sm" role="alert">
+                <div className="flex items-center">
+                  <Calendar className="w-5 h-5 mr-3 flex-shrink-0" />
+                  <p className="font-medium">
+                    Corpus de Datos Limitado:
+                    <span className="font-normal ml-1">
+                      El análisis se realiza sobre el corpus disponible, que abarca desde el <strong className="whitespace-nowrap">{corpusDateRange.minString}</strong> hasta el <strong className="whitespace-nowrap">{corpusDateRange.maxString}</strong>.
+                      Las fechas de búsqueda están restringidas a este período.
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
+            {/* ------------------------------------------------------------------ */}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
@@ -323,7 +388,7 @@ function App() {
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 h-[611.25px] flex flex-col">
                     <h3 className="text-xl font-semibold text-gray-800 mb-4 flex-shrink-0">Publicaciones Analizadas ({backendPosts.length})</h3>
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                      {backendPosts.map(post => (<TweetCard key={post.id_post} post={post} />))}
+                      {backendPosts.map(post => (<TweetCard key={post.id_post} post={{ ...post, usuario: post.usuario || post.candidato }} />))}
                     </div>
                   </div>
                   <div className="h-[600px]">
