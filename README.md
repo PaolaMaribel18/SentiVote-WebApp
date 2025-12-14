@@ -27,6 +27,7 @@ SentiVote-WebApp/
 │   └── ...                           # Scripts de Python
 │
 └── README.md
+
 ---
 
 ## 🚀 Instalación y Ejecución
