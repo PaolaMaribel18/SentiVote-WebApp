@@ -3,11 +3,13 @@ import json
 import re
 import io
 import base64
+import unicodedata
 
 # Librerías de Machine Learning / NLP
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification 
 import nltk
 from nltk.corpus import stopwords
+from nltk.stem.snowball import SnowballStemmer
 
 # Librerías de la Web (Flask)
 from flask import Flask, request, jsonify # Eliminamos 'send_file' si no se usa
@@ -24,7 +26,6 @@ matplotlib.use('Agg') # Para evitar problemas con GUI
 import google.generativeai as genai 
 
 from datetime import datetime, timezone 
-# --------------------------------------------------------------------------------
 
 
 # Configurar variables de entorno
@@ -36,7 +37,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
-    model_gemini = genai.GenerativeModel("gemini-2.5-flash")
+    model_gemini = genai.GenerativeModel("gemini-2.5-flash-lite")
 else:
     print("⚠️ ADVERTENCIA: No se encontró GEMINI_API_KEY en .env")
     model_gemini = None
@@ -88,8 +89,6 @@ except Exception as e:
         modelo = None # Si todo falla, no hay modelo.
 # ---------------------------------------------------------------------------------------------------
     
-    
-
 # Diccionarios
 diccionario_positivo = [
     # Términos generales de alta carga
@@ -101,7 +100,10 @@ diccionario_positivo = [
     "seguridad", "protección", "firmeza", "orden", "estabilidad", "futuro", "empleo", 
     "oportunidad", "inversión", "crecimiento", "salud", "educación", "libertad", 
     "consenso", "patria", "unión", "solución", "seriedad", "propuestas", "calma", 
-    "mano dura"
+    "mano dura",
+    
+    # Expresiones y modismos positivos
+    "me encanta", "apoyo", "aplaudo", "bien hecho", "gran trabajo", "felicitaciones", "bravo", "aplausos", "excelente gestión", "muy bien", "buen trabajo", "aplaudible", "admirable", "impresionante", "increíble", "fantástico", "apoyamos", "apoyaré", "apoyaré siempre", "apoyando", "apoyada", "apoyado", "apoyados", "apoyada siempre", "apoyando siempre"
 ]
 
 diccionario_negativo = [
@@ -109,12 +111,20 @@ diccionario_negativo = [
     "malo", "horrible", "negativo", "terrible", "odio", "fracaso", "débil", "miseria", 
     "desastre", "corrupción", "mentira", "robo", "incompetente", "ineficiente", "crisis",
     "problema", "conflicto", "violencia", "inseguridad", "pobreza", "desempleo", "ladron", "narco",
-    
     # Términos especializados en política y agenda ecuatoriana
     "sicariato", "extorsión", "impunidad", "bandas", "crimen", "cárcel", "caos",
     "deuda", "impuestos", "alza", "carestía", "deficit", "quiebra", "fraude", 
     "populismo", "traidor", "incumplimiento", "montaje", "juicio", "asamblea",
-    "engaño", "burla", "desconfianza", "cínico", "cúpula"
+    "engaño", "burla", "desconfianza", "cínico", "cúpula",
+    # Expresiones y modismos negativos
+    "que asco", "que vergüenza", "pésimo", "pésima", "pésimos", "pésimas", "lamentable", "decepcionante", "decepcionado", "decepcionada", "decepcionados", "decepcionadas", "fracaso total", "puro cuento", "pura mentira", "mentira tras mentira", "mentiroso", "mentirosa", "mentirosos", "mentirosas", "no sirve", "no sirven", "no sirvió", "no sirvieron", "no funciona", "no funcionan", "no funcionará", "no funcionarán", "no funcionaría", "no funcionarían",
+    # Expresiones frecuentes en comentarios
+    "es un chiste", "llenando los bolsillos", "cachetes", "otra vez", "no llegará", "no aporta", "no suma", "no representa", "no cuenta", "no importa", "no sirve para nada", "no tiene sentido", "no tiene caso", "no tiene lógica", "no tiene razón", "no tiene futuro", "no tiene solución", "no tiene arreglo", "no tiene remedio", "no tiene esperanza", "no tiene valor", "no tiene mérito", "no tiene apoyo", "no tiene respaldo", "no tiene fuerza", "no tiene liderazgo", "no tiene experiencia", "no tiene capacidad", "no tiene honestidad", "no tiene transparencia", "no tiene eficiencia", "no tiene competencia", "no tiene propuestas", "no tiene calma", "no tiene mano dura"
+]
+
+# Diccionario de insultos y malas palabras ecuatorianas (puedes ampliarlo según tu contexto)
+diccionario_insultos_ecuador = [
+    "huevon", "huevón", "verga", "longo", "caretuco", "mamerto", "pendejo", "cojudo", "cojudos", "cojuda", "cojudas", "maricón", "maricon", "puta", "puto", "putas", "putos", "mierda", "jodido", "jodida", "jodidos", "jodidas", "cabron", "cabrona", "cabrones", "chucha", "chuchaqui", "chuchaquis", "chuchaqueros", "chuchaquera", "chuchaqueras", "chuchaquero", "chuchaqueros", "carajo", "carajos", "culero", "culera", "culeros", "culeras", "culicagado", "culicagada", "culicagados", "culicagadas", "mamón", "mamon", "mamona", "mamones", "mamonas", "pendejada", "pendejadas", "pendejo", "pendeja", "pendejos", "pendejas", "baboso", "babosa", "babosos", "babosas", "imbecil", "imbécil", "imbeciles", "imbéciles", "idiota", "idiotas", "tarado", "tarada", "tarados", "taradas", "zángano", "zangano", "zángana", "zangana", "zánganos", "zanganos", "zánganas", "zanganas"
 ]
 
 NEGATORS = {
@@ -137,6 +147,11 @@ except LookupError:
 CUSTOM_STOP_WORDS = {
     'rt', 'via', 'https', 'http', 'www', 'com', 'co', 'ec', 'org'
     # Las palabras del diccionario manual que quitaste están ahora en NLTK
+    # Verbos y conectores comunes que no aportan sentimiento
+    'ser', 'estar', 'hacer', 'decir', 'ver', 'ir', 'dar', 'ya', 'si', 'no', 'tan', 'muy', 
+    'mas', 'más', 'porque', 'porqué', 'ahora', 'aqui', 'aquí', 'alli', 'allí', 'entonces',
+    'creo', 'dice', 'hace', 'solo', 'sólo', 'cada', 'vez', 'todo', 'toda', 'todos', 'todas',
+    'gente', 'pues', 'así', 'asi', 'cosa', 'cosas', 'año', 'años', 'video', 'foto', 'imagen'
 }
 
 # 3. Combinar y usar el nuevo conjunto robusto
@@ -149,34 +164,55 @@ alpha = 0.4
 # --------------------------------------------------------------------------------------
 # Función para limpiar texto para wordcloud y análisis 
 def limpiar_texto_para_wordcloud(texto):
-    """Limpia el texto para el wordcloud"""
+    """Limpia el texto para el wordcloud eliminando ruido y palabras cortas"""
     if not texto: return ""
-    texto = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', texto)
+    
+    # Pasar a minúsculas
+    texto = texto.lower()
+    
+    # Eliminar URLs completas
+    texto = re.sub(r'http\S+|www\.\S+', '', texto)
+    
+    # Eliminar menciones (@usuario)
     texto = re.sub(r'@\w+', '', texto)
-    texto = re.sub(r'#(\w+)', r'\1', texto)
-    texto = re.sub(r'[^\w\s]', ' ', texto)
-    texto = re.sub(r'\b\d+\b', '', texto)
+    
+    # Hashtags: Quitar el símbolo # pero dejar el texto (opcional: quitar todo si prefieres)
+    texto = re.sub(r'#', '', texto)
+    
+    # Eliminar caracteres especiales (dejando letras y tildes)
+    texto = re.sub(r'[^\w\sáéíóúñü]', ' ', texto)
+    
+    # Eliminar números
+    texto = re.sub(r'\d+', '', texto)
+    
+    # Eliminar palabras de 1 o 2 letras (ruido como "x", "q", "de", "el")
+    texto = re.sub(r'\b\w{1,2}\b', '', texto)
+    
+    # Eliminar espacios múltiples
     texto = re.sub(r'\s+', ' ', texto).strip()
-    return texto.lower()
+    
+    return texto
 
 # Función para generar wordcloud y devolver imagen en base64 y palabras frecuentes 
-def generar_wordcloud(textos):
-    """Genera un wordcloud a partir de una lista de textos"""
+
+def generar_wordcloud(textos, colormap='viridis'): 
+    """Genera un wordcloud a partir de una lista de textos con color específico"""
     try:
-        texto_combinado = ' '.join([limpiar_texto_para_wordcloud(texto) for texto in textos if texto.strip()])
+        # Usamos la limpieza mejorada del paso anterior
+        texto_combinado = ' '.join([limpiar_texto_para_wordcloud(texto) for texto in textos if texto])
         
-        # Validar si hay suficientes palabras (al menos 1 palabra válida)
         if not texto_combinado.strip() or len(texto_combinado) < 3:
             return None, {} 
         
         wordcloud = WordCloud(
             width=800, height=400,
             background_color='white',
-            max_words=50,
+            max_words=80,             # Menos palabras para que sea más legible
             stopwords=STOP_WORDS_ES,
-            min_font_size=10, max_font_size=80,
-            colormap='viridis',
+            min_font_size=10, max_font_size=90,
+            colormap=colormap,        
             relative_scaling=0.5,
+            collocations=False,       # Evita frases repetidas
             random_state=42
         ).generate(texto_combinado)
         
@@ -185,7 +221,7 @@ def generar_wordcloud(textos):
         plt.axis('off')
         
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150, facecolor='white', edgecolor='none')
+        plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150, facecolor='white')
         img_buffer.seek(0)
         img_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
         plt.close()
@@ -195,6 +231,83 @@ def generar_wordcloud(textos):
     except Exception as e:
         print(f"Error generando wordcloud: {e}")
         return None, {}
+    
+# Función para normalizar palabras y detectar insultos disfrazados
+def normalizar_palabra(palabra):
+    # Quitar acentos y normalizar caracteres
+    palabra = unicodedata.normalize('NFKD', palabra).encode('ascii', 'ignore').decode('utf-8')
+    # Reemplazos comunes de leet y símbolos
+    reemplazos = {
+        '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '0': 'o', '@': 'a', '$': 's', '!': 'i', 'x': 'a', '*': 'a', '?': 'a', 'ñ': 'n'
+    }
+    for k, v in reemplazos.items():
+        palabra = palabra.replace(k, v)
+    return palabra
+
+# Regex para malas palabras disfrazadas (puedes ampliar)
+regex_insultos = [
+    r'm[i1!][e3]r[dtd][a@x*?]',
+    r'h[ue]+v[o0]n',
+    r'p[u*]t[ao@*?]',
+    r'c[o0]j[u*]d[ao@*?]',
+    r'v[e3]rg[a@x*?]',
+    r'mam[o0]n',
+    r'imb[e3]c[i1]l',
+    r'idi[o0]t[ao@*?]',
+    r'p[e3]nd[e3]j[ao@*?]',
+    r'cabron',
+    r'chucha',
+    r'jodid[oa@*?]',
+    r'babos[oa@*?]',
+    r'tarad[oa@*?]',
+    r'zangan[oa@*?]'
+]
+
+def es_insulto(palabra):
+    palabra_norm = normalizar_palabra(palabra.lower())
+    for insulto in diccionario_insultos_ecuador:
+        if insulto in palabra_norm:
+            return True
+    for patron in regex_insultos:
+        if re.fullmatch(patron, palabra_norm):
+            return True
+    return False
+
+# Ampliar el diccionario negativo con palabras problemáticas
+palabras_negativas_extra = [
+    "culpa", "culpable", "culpables", "drogas", "droga", "panfleto", "panfletos", "curia", "carita", "miedo", "pobres", "negro", "indecencia", "indecente", "indecentes", "pobre", "pobresa", "pobrezas", "caritas", "curias", "negros", "miedos"
+]
+diccionario_negativo = list(set(diccionario_negativo + palabras_negativas_extra))
+
+# --------------------------------------------------------------------------------------
+# Generar wordclouds por sentimiento con filtrado avanzado
+# --------------------------------------------------------------------------------------
+# Inicializar stemmer español
+stemmer = SnowballStemmer("spanish")
+
+# Filtrado por raíz (stemming) en el filtrado de wordclouds
+def filtrar_por_diccionario(textos, sentimiento):
+    filtrados = []
+    stems_neg = set(stemmer.stem(p) for p in diccionario_negativo)
+    stems_pos = set(stemmer.stem(p) for p in diccionario_positivo)
+    for texto in textos:
+        palabras = texto.lower().split()
+        palabras_filtradas = []
+        for p in palabras:
+            if es_insulto(p):
+                continue
+            stem = stemmer.stem(p)
+            if sentimiento == "POS" and (p in diccionario_negativo or stem in stems_neg):
+                continue
+            if sentimiento == "NEG" and (p in diccionario_positivo or stem in stems_pos):
+                continue
+            if sentimiento == "NEU" and ((p in diccionario_positivo or stem in stems_pos) or (p in diccionario_negativo or stem in stems_neg)):
+                continue
+            palabras_filtradas.append(p)
+        filtrados.append(' '.join(palabras_filtradas))
+    return filtrados
+
+# Generar wordclouds separados por sentimiento
 
 def generar_wordclouds_por_sentimiento(publicaciones):
     textos_por_sentimiento = {
@@ -203,36 +316,54 @@ def generar_wordclouds_por_sentimiento(publicaciones):
         "NEU": []
     }
 
-    # --- CORRECCIÓN DE LÓGICA DE AGRUPACIÓN ---
+    # Mapa de colores para cada sentimiento (Visualmente ayuda a diferenciar)
+    colores_map = {
+        "POS": "Greens",   
+        "NEG": "Reds",     
+        "NEU": "Blues"     
+    }
+
+    conteo_origen = {"posts": 0, "comentarios": 0}
+
     for pub in publicaciones:
-        # 1. El texto del POST va a la categoría del POST
-        sentimiento_post = pub.get("sentiment", "NEU") # Usamos "sentiment" que es la clave que definimos en procesar
-        if sentimiento_post in textos_por_sentimiento:
-            textos_por_sentimiento[sentimiento_post].append(pub.get("text", "")) 
+        # 1. El texto del POST
+        sentimiento_post = pub.get("sentiment", "NEU")
+        texto_post = pub.get("texto", "")      
+        if not texto_post:
+            texto_post = pub.get("text", "")
+            if texto_post:
+                print(f"ALERTA DEBUG: El texto estaba en 'text', no en 'texto'. Ajusta tu código.")
+
+        if sentimiento_post in textos_por_sentimiento and texto_post:
+            textos_por_sentimiento[sentimiento_post].append(texto_post)
+            conteo_origen["posts"] += 1
         
-        # 2. El texto del COMENTARIO va a la categoría del COMENTARIO (Independiente del post)
+        # 2. El texto del COMENTARIO
         for comentario in pub.get("comentarios", []):
             sentimiento_com = comentario.get("sentimiento_comentario", "NEU")
-            if sentimiento_com in textos_por_sentimiento:
-                textos_por_sentimiento[sentimiento_com].append(comentario["texto_comentario"])
+            texto_com = comentario.get("texto_comentario", "")
             
-    # DEBUG: Ver distribución real de palabras
-    print("--- Distribución de textos para Nubes de Palabras ---")
-    for key, textos in textos_por_sentimiento.items():
-        print(f"[{key}]: {len(textos)} textos acumulados.")
-
+            if sentimiento_com in textos_por_sentimiento and texto_com:
+                textos_por_sentimiento[sentimiento_com].append(texto_com)
+                conteo_origen["comentarios"] += 1
+                
     wordclouds_sentimiento = {}
     for sentimiento, textos in textos_por_sentimiento.items():
-        img_base64, palabras_frecuentes = generar_wordcloud(textos)
+        color = colores_map.get(sentimiento, "viridis")
+        # Filtrar palabras de polaridad opuesta antes de generar la wordcloud
+        textos_filtrados = filtrar_por_diccionario(textos, sentimiento)
+        img_base64, palabras_frecuentes = generar_wordcloud(textos_filtrados, colormap=color)
         
         wordclouds_sentimiento[sentimiento] = {
-            "imagen": img_base64, # Puede ser None si no hay suficientes palabras
+            "imagen": img_base64, 
             "palabras": palabras_frecuentes if img_base64 else {}
         }
 
     return wordclouds_sentimiento
 
+# --------------------------------------------------------------------------------------
 # Cargar corpus desde archivo JSON 
+#--------------------------------------------------------------------------------------
 def cargar_corpus():
     ruta = os.path.join(os.path.dirname(__file__), "data/corpus.json") 
     try:
@@ -248,49 +379,66 @@ def cargar_corpus():
 def analizar_texto_con_diccionario(texto, sentimiento_modelo, confianza_modelo):
     """
     Analiza el texto buscando palabras clave para reforzar la confianza del modelo,
-    con manejo básico de negación.
+    con manejo mejorado de negación, frases y sarcasmo.
     """
     texto_lower = texto.lower()
-    
+
+    # Refuerzo: Si el texto contiene insultos, forzar NEG
+    palabras = re.findall(r'\b\w+\b', texto_lower)
+    for palabra in palabras:
+        if es_insulto(palabra):
+            return "NEG", 1.0
+
     # 1. Limpieza y Tokenización del texto de entrada
-    # Limpiamos solo para obtener palabras, pero mantenemos el orden para la negación.
-    words = re.findall(r'\b\w+\b', texto_lower)
-    
+    # Mantener el orden para la negación y buscar frases completas
+    words = palabras
     palabras_positivas_contadas = 0
     palabras_negativas_contadas = 0
-    
+
+    # Buscar frases completas positivas/negativas
+    for frase in diccionario_positivo:
+        if frase in texto_lower:
+            palabras_positivas_contadas += 2 if ' ' in frase else 1
+    for frase in diccionario_negativo:
+        if frase in texto_lower:
+            palabras_negativas_contadas += 2 if ' ' in frase else 1
+
+    # Lógica de negación mejorada: si una palabra positiva/negativa está precedida por un negador en las 3 palabras anteriores
     for i, word in enumerate(words):
-        # 2. Revisar si la palabra está negada
-        # Buscamos si la palabra anterior (índice i-1) es un negador.
-        is_negated = False
-        if i > 0 and words[i-1] in NEGATORS:
-            is_negated = True
-        
-        # 3. Aplicar la lógica de sentimiento
-        if word in diccionario_positivo:
-            if not is_negated:
-                palabras_positivas_contadas += 1
-            # Si se niega ("no bueno"), no cuenta como positivo, sino como neutral.
-            
-        elif word in diccionario_negativo:
-            if not is_negated:
-                palabras_negativas_contadas += 1
-            # Si se niega ("no corrupción"), no cuenta como negativo, sino como neutral.
-            
-    # 4. Decisión de Refuerzo
+        window = words[max(0, i-3):i]
+        is_negated = any(w in NEGATORS for w in window)
+        if word in diccionario_positivo and is_negated:
+            palabras_positivas_contadas -= 1
+        if word in diccionario_negativo and is_negated:
+            palabras_negativas_contadas -= 1
+
+    # Refuerzo según confianza del modelo
     if palabras_positivas_contadas > palabras_negativas_contadas and palabras_positivas_contadas > 0:
-        # Si el modelo base predijo algo negativo o neutro, le damos un empujón positivo.
-        return "POS", min(confianza_modelo + 0.15, 1.0) 
-        
+        if confianza_modelo < 0.7:
+            return "POS", min(confianza_modelo + 0.3, 1.0)
+        return "POS", min(confianza_modelo + 0.15, 1.0)
     elif palabras_negativas_contadas > palabras_positivas_contadas and palabras_negativas_contadas > 0:
-        # Si el modelo base predijo algo positivo o neutro, le damos un empujón negativo.
+        if confianza_modelo < 0.7:
+            return "NEG", min(confianza_modelo + 0.3, 1.0)
         return "NEG", min(confianza_modelo + 0.15, 1.0)
-        
-    else:
-        # Si no hay palabras clave o si se anularon por negación, confiamos en el modelo de Deep Learning.
-        return sentimiento_modelo, confianza_modelo
+    
+    # Detección simple de sarcasmo: si hay "claro", "seguro", "obvio" y signos de exclamación
+    sarcasmo = any(s in texto_lower for s in ["claro", "seguro", "obvio"]) and ("!" in texto or "¿" in texto)
+    if sarcasmo:
+        # Invertir el sentimiento si el modelo no está seguro
+        if confianza_modelo < 0.8:
+            if sentimiento_modelo == "POS":
+                return "NEG", min(confianza_modelo + 0.2, 1.0)
+            elif sentimiento_modelo == "NEG":
+                return "POS", min(confianza_modelo + 0.2, 1.0)
+    
+    # Refuerzo para frases cortas y sarcásticas
+    if len(words) <= 7 and palabras_negativas_contadas > 0:
+        return "NEG", 1.0
+    
+    return sentimiento_modelo, confianza_modelo
 
-
+# Funciones de manejo de fechas y rangos
 def parse_date(date_str, is_end=False):
     """
     Convierte una cadena de fecha (YYYY-MM-DD) en un objeto datetime aware (UTC), 
@@ -466,28 +614,12 @@ def analizar():
                 raw_post_sentiment = "NEU (Error)"
                 raw_post_confidence = 0.0
                 sent_post, conf_post = "NEU", 0.5
-            
-            # -------------------------------------------------------------
-            # >>> IMPRESIÓN DE COMPARACIÓN DEL POST <<<
-            # -------------------------------------------------------------
-            # print(f"\n--- POST: {post.get('id_post', 'N/A')} ---")
-            # print(f"Texto: '{texto_publicacion[:100]}...'")
-            # print(f"  [1] Modelo FT Puro: {raw_post_sentiment} (Confianza: {raw_post_confidence:.3f})")
-            # print(f"  [2] Híbrido Reforzado: {sent_post} (Confianza: {conf_post:.3f})")
-            
-            # Solo muestra el mensaje si hubo un cambio significativo
-            # if raw_post_sentiment != sent_post or abs(raw_post_confidence - conf_post) > 0.01:
-            #      print("  >>> POST REFORZADO/AJUSTADO por Diccionario/Negación <<<")
-            # -------------------------------------------------------------
-
 
             # 2. Análisis de Comentarios
             comentarios_procesados = []
             sentimientos_comments = []
             confianzas_comments = []
-            
-            # >>> IMPRESIÓN DE COMENTARIOS (Opcional, activa solo para depuración profunda) <<<
-            # print(f"\n   --- Comentarios del Post {post.get('id_post')} ---") 
+
 
             for com in post.get("comentarios", []):
                 txt_com = com.get("texto_comentario", "")
@@ -511,11 +643,6 @@ def analizar():
                     raw_com_sentiment = "NEU (Error)"
                     raw_com_confidence = 0.0
                     sent_com, conf_com = "NEU", 0.5
-                
-                # >>> IMPRESIÓN DE COMPARACIÓN DEL COMENTARIO (Descomentar para ver) <<<
-                # if raw_com_sentiment != sent_com or abs(raw_com_confidence - conf_com) > 0.01:
-                #     print(f"     [!] Comentario ajustado: '{txt_com[:50]}...'")
-                #     print(f"         Puro: {raw_com_sentiment} ({raw_com_confidence:.3f}) -> Híbrido: {sent_com} ({conf_com:.3f})")
                 
                 comentarios_procesados.append({
                     "id_comentario": com.get("id_comentario"),
@@ -569,10 +696,10 @@ def analizar():
             })
 
         print("\nGenerando wordclouds...")
-        # Wordcloud General
-        wc_general, _ = generar_wordcloud(todos_los_textos)
+       # Wordcloud General (Multicolor por defecto 'viridis' o 'Set2')
+        wc_general, _ = generar_wordcloud(todos_los_textos, colormap='Dark2') 
         
-        # Wordclouds por sentimiento (POS, NEG, NEU)
+        # Wordclouds por sentimiento (Con colores específicos)
         wc_sentimientos = generar_wordclouds_por_sentimiento(publicaciones_procesadas)
 
         return jsonify({
@@ -607,7 +734,7 @@ def generar_conclusiones():
         - Positivas: {top_pos if top_pos else "No detectadas"}
         - Negativas: {top_neg if top_neg else "No detectadas"}
         
-        Responde en 2 frases objetivas como analista de datos.
+        Responde en 2 frases objetivas como analista de datos electoral.
         """
         
         try:
