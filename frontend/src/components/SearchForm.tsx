@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Calendar, Filter, Loader2 } from 'lucide-react';
+import { Search, Calendar, Loader2, ArrowRight } from 'lucide-react';
 import { SearchFilters } from '../types';
 import { CorpusDateRange } from '../App';
 
@@ -10,12 +10,11 @@ interface SearchFormProps {
 }
 
 export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading, dateRange }) => {
+  // Inicializamos con valores vacíos, pero respetando la interfaz
   const [filters, setFilters] = useState<SearchFilters>({
     query: '',
-    platforms: ['twitter', 'facebook', 'instagram'],
     dateFrom: '',
     dateTo: '',
-    minEngagement: 0
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -26,94 +25,101 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading, dat
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 mb-10 transform transition-all hover:shadow-2xl">
       <form onSubmit={handleSubmit} className="space-y-6">
+        
+        {/* --- Campo de Búsqueda Principal --- */}
         <div>
-          <label htmlFor="query" className="block text-sm font-semibold text-gray-700 mb-2">
-            Consulta o Palabra Clave
+          <label htmlFor="query" className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+            ¿Qué deseas analizar?
           </label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            </div>
             <input
               type="text"
               id="query"
               value={filters.query}
               onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
-              placeholder="Ej: Daniel Noboa, Luisa Gonzalez..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              placeholder="Ej: Daniel Noboa, Seguridad, Elecciones..."
+              className="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white transition-all duration-200 text-lg shadow-sm"
               required
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* // Input Fecha Desde */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <Calendar className="inline w-4 h-4 mr-1" />
-              Fecha Desde
+        {/* --- Filtros de Fecha (Grid ajustado) --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* Fecha Desde */}
+          <div className="relative group">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+              Fecha Inicio
             </label>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              // >>> APLICACIÓN DE RESTRICCIÓN DE RANGO <<<
-              min={dateRange.minString} // La fecha más antigua permitida
-              max={dateRange.maxString} // La fecha más reciente permitida
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Calendar className="h-5 w-5 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
+              </div>
+              <input
+                type="date"
+                value={filters.dateFrom || ''}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                min={dateRange.minString}
+                max={dateRange.maxString}
+                className="block w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 focus:bg-white transition-all duration-200 sm:text-sm shadow-sm"
+              />
+            </div>
           </div>
 
-          {/* // Input Fecha Hasta */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <Calendar className="inline w-4 h-4 mr-1" />
-              Fecha Hasta
+          {/* Fecha Hasta */}
+          <div className="relative group">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+              Fecha Fin
             </label>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              // >>> APLICACIÓN DE RESTRICCIÓN DE RANGO <<<
-              min={dateRange.minString}
-              max={dateRange.maxString}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <Filter className="inline w-4 h-4 mr-1" />
-              Engagement Mínimo
-            </label>
-            <input
-              type="number"
-              value={filters.minEngagement}
-              onChange={(e) => setFilters(prev => ({ ...prev, minEngagement: parseInt(e.target.value) || 0 }))}
-              min="0"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Calendar className="h-5 w-5 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
+              </div>
+              <input
+                type="date"
+                value={filters.dateTo || ''}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                min={dateRange.minString}
+                max={dateRange.maxString}
+                className="block w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 focus:bg-white transition-all duration-200 sm:text-sm shadow-sm"
+              />
+            </div>
           </div>
         </div>
 
+        {/* --- Botón de Acción --- */}
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={isLoading || !filters.query.trim()}
+            className={`
+              w-full flex items-center justify-center py-4 px-6 rounded-xl text-white font-bold text-lg shadow-lg transform transition-all duration-200
+              ${isLoading || !filters.query.trim() 
+                ? 'bg-gray-300 cursor-not-allowed opacity-70' 
+                : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:scale-[1.01] hover:shadow-xl active:scale-[0.99]'}
+            `}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="animate-spin w-6 h-6 mr-2" />
+                <span className="tracking-wide">Analizando datos...</span>
+              </>
+            ) : (
+              <>
+                <Search className="w-5 h-5 mr-2" />
+                <span>Iniciar Análisis</span>
+                <ArrowRight className="w-5 h-5 ml-2 opacity-70" />
+              </>
+            )}
+          </button>
+        </div>
 
-        <button
-          type="submit"
-          disabled={isLoading || !filters.query.trim()}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="animate-spin w-5 h-5 mr-2" />
-              Analizando...
-            </>
-          ) : (
-            <>
-              <Search className="w-5 h-5 mr-2" />
-              Iniciar Análisis
-            </>
-          )}
-        </button>
       </form>
     </div>
   );

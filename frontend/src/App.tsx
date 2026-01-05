@@ -6,48 +6,16 @@ import { SentimentCard } from './components/SentimentCard';
 import { TweetCard } from './components/TweetCard';
 import { SentimentChart } from './components/SentimentChart';
 import { ReportGenerator } from './components/ReportGenerator';
-import { SearchFilters, SentimentAnalysis, ViewType } from './types'; // Importar ViewType
+import { SearchFilters, SentimentAnalysis, ViewType, BackendResponse, BackendPost } from './types'; // Importar ViewType
 import { Footer } from './components/Footer';
 import { HowItWorksView } from './components/HowItWorksView';
+import { CompareView } from './components/CompareView';
 
 
 // Configuración de la API
 const API_BASE_URL = 'http://localhost:5000';
 
-// Interfaces para los datos del backend (Se mantienen igual...)
-interface BackendComment {
-  id_comentario: string;
-  texto_comentario: string;
-  sentimiento_comentario: 'POS' | 'NEG' | 'NEU';
-  confianza_comentario: number;
-}
-// ... (Resto de interfaces BackendPost y BackendResponse se mantienen igual)
-interface BackendPost {
-  id_post: string;
-  candidato: string;
-  texto: string;
-  sentimiento_publicacion: 'POS' | 'NEG' | 'NEU';
-  confianza_publicacion: number;
-  comentarios: BackendComment[];
-  sentimiento_comentarios: 'POS' | 'NEG' | 'NEU';
-  confianza_comentarios: number;
-  sentimiento_final: 'POS' | 'NEG' | 'NEU';
-  confianza_final: number;
-  usuario: string;
-}
 
-interface BackendResponse {
-  publicaciones: BackendPost[];
-  wordcloud: {
-    general: string;
-    por_sentimiento: {
-      POS: { imagen: string; palabras: Record<string, number> } | null;
-      NEG: { imagen: string; palabras: Record<string, number> } | null;
-      NEU: { imagen: string; palabras: Record<string, number> } | null;
-    };
-  };
-  total_textos_analizados: number;
-}
 // En la sección de interfaces de App.tsx (junto a BackendPost, BackendResponse, etc.)
 
 interface BackendHealthResponse {
@@ -114,8 +82,6 @@ function App() {
           query: filters.query,
           dateFrom: filters.dateFrom,
           dateTo: filters.dateTo,
-          platforms: filters.platforms,
-          minEngagement: filters.minEngagement
         }),
       });
 
@@ -415,10 +381,7 @@ function App() {
 
         {/* VISTA: COMPARAR (Placeholder) */}
         {activeView === 'compare' && (
-          <div className="text-center py-16">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Comparar Candidatos</h2>
-            <p className="text-gray-600">Aquí irá la funcionalidad para comparar dos búsquedas.</p>
-          </div>
+            <CompareView />
         )}
 
       </div>

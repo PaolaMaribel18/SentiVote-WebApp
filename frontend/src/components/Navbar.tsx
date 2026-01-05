@@ -1,4 +1,4 @@
-import { Home, HelpCircle, GitCompare} from 'lucide-react';
+import { Home, HelpCircle, GitCompare } from 'lucide-react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPersonBooth } from "@fortawesome/free-solid-svg-icons";
 
@@ -12,8 +12,9 @@ interface NavbarProps {
 export function Navbar({ activeView, onNavigate }: NavbarProps) {
   const navItems = [
     { id: 'home' as ViewType, label: 'Inicio', icon: <Home className="w-5 h-5" /> },
-    { id: 'how-it-works' as ViewType, label: 'Cómo Funciona', icon: <HelpCircle className="w-5 h-5" /> },
     { id: 'compare' as ViewType, label: 'Comparar', icon: <GitCompare className="w-5 h-5" /> },
+    { id: 'how-it-works' as ViewType, label: 'Cómo Funciona', icon: <HelpCircle className="w-5 h-5" /> }
+
 
   ];
 
@@ -24,7 +25,7 @@ export function Navbar({ activeView, onNavigate }: NavbarProps) {
           {/* Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => onNavigate('home')}>
             <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg">
-                  <FontAwesomeIcon icon={faPersonBooth} className=" text-white" />
+              <FontAwesomeIcon icon={faPersonBooth} className=" text-white" />
             </div>
             <span className="text-gray-900">SentiVote Ec</span>
           </div>
@@ -35,11 +36,10 @@ export function Navbar({ activeView, onNavigate }: NavbarProps) {
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  activeView === item.id
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${activeView === item.id
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 {item.icon}
                 <span>{item.label}</span>
@@ -63,11 +63,10 @@ export function Navbar({ activeView, onNavigate }: NavbarProps) {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-all ${
-                activeView === item.id
+              className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-all ${activeView === item.id
                   ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                   : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                }`}
             >
               {item.icon}
               <span className="text-xs">{item.label}</span>
