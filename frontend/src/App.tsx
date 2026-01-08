@@ -129,7 +129,6 @@ function App() {
   };
 
   const convertBackendDataToFrontend = (backendData: BackendPost[], query: string, conclusion?: string | null): SentimentAnalysis => {
-    // (Lógica existente resumida para no extender el código...)
     const allComments = backendData.flatMap(post => post.comentarios);
     const totalPosts = backendData.length;
     const totalComments = allComments.length;
