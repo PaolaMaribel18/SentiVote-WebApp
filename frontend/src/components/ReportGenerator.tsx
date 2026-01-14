@@ -52,7 +52,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysis, back
       let y = 52;
       doc.setTextColor(0);
       doc.setFontSize(12);
-      doc.text(`Consulta: ${analysis.query}`, 14, y);
+      doc.text(`Candidato consultado: ${analysis.query}`, 14, y);
       y += 8;
       doc.text(`Fecha de generación: ${new Date().toLocaleString()}`, 14, y);
       y += 8;
@@ -92,7 +92,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysis, back
         doc.text(splitText, 14, yStartConclusion + 8);
         doc.setFontSize(9);
         doc.setTextColor(100);
-        doc.text("* Esta conclusión fue generada automáticamente por un modelo de lenguaje (Gemini Flash 2.0).", 14, yStartConclusion + 8 + splitText.length * 6 + 4);
+        doc.text("* Esta conclusión fue generada automáticamente por un modelo de lenguaje (gemini-2.5-flash).", 14, yStartConclusion + 8 + splitText.length * 6 + 4);
         doc.setTextColor(0);
       }
 

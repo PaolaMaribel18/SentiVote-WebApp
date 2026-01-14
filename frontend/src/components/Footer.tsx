@@ -1,7 +1,7 @@
 import React from 'react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPersonBooth } from "@fortawesome/free-solid-svg-icons";
-import { Github, Twitter, Mail, Heart } from 'lucide-react';
+import { Github,  Mail } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -18,7 +18,7 @@ export function Footer() {
               <span className="text-lg font-bold text-gray-900">SentiVote</span>
             </div>
             <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
-              Plataforma de análisis de sentimientos políticos en tiempo real para el Ecuador, impulsada por IA y minería de datos.
+              Plataforma de análisis de sentimientos políticos para el Ecuador, impulsada por IA y minería de datos.
             </p>
           </div>
 
@@ -29,7 +29,7 @@ export function Footer() {
             </h3>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-gray-500 hover:text-indigo-600 transition-colors text-sm">
+                <a href="" className="text-gray-500 hover:text-indigo-600 transition-colors text-sm">
                   Inicio
                 </a>
               </li>
@@ -52,9 +52,6 @@ export function Footer() {
               Conecta con nosotros
             </h3>
             <div className="flex gap-4">
-               <a href="#" className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
-                 <Twitter className="w-5 h-5" />
-               </a>
                <a href="#" className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-all">
                  <Github className="w-5 h-5" />
                </a>
@@ -70,11 +67,7 @@ export function Footer() {
           <p className="text-sm text-gray-500">
             © {new Date().getFullYear()} SentiVote. Todos los derechos reservados.
           </p>
-          <div className="flex items-center text-sm text-gray-500 gap-1">
-            <span>Hecho con</span>
-            <Heart className="w-4 h-4 text-red-500 fill-current" />
-            <span>en Ecuador</span>
-          </div>
+
         </div>
       </div>
     </footer>

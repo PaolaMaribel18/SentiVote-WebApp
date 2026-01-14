@@ -42,7 +42,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading, dat
               id="query"
               value={filters.query}
               onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
-              placeholder="Ej: Daniel Noboa, Luisa Gonzales..."
+              placeholder="Ej: Daniel Noboa, Luisa Gonzalez ..."
               className="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white transition-all duration-200 text-lg shadow-sm"
               required
             />

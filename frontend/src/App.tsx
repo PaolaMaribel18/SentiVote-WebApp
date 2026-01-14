@@ -16,7 +16,6 @@ import { CompareView } from './components/CompareView';
 const API_BASE_URL = 'http://localhost:5000';
 
 
-// En la sección de interfaces de App.tsx (junto a BackendPost, BackendResponse, etc.)
 
 interface BackendHealthResponse {
   estado: string;
@@ -343,7 +342,7 @@ function App() {
                       {conclusion}
                     </p>
                     <p className="text-xs text-gray-500 italic mt-2">
-                      * Esta conclusión fue generada automáticamente por un modelo de lenguaje (Gemini Flash 2.0).
+                      * Esta conclusión fue generada automáticamente por un modelo de lenguaje (gemini-2.5-flash).
                     </p>
                   </div>
                 )}
