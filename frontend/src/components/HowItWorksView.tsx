@@ -1,56 +1,54 @@
 import { Search, Database, Brain, BarChart3, CheckCircle, ArrowRight } from 'lucide-react';
 
 export function HowItWorksView() {
-  const steps = [
-    {
-      number: '01',
-      icon: <Search className="w-8 h-8" />,
-      title: 'Ingresa tu Búsqueda',
-      description: 'Escribe el nombre de un candidato, partido político o tema electoral que deseas analizar',
-      details: [
-        'Búsqueda flexible por nombre o tema',
-        'Sugerencias automáticas',
-        'Soporte para múltiples términos'
-      ],
-      color: 'from-blue-500 to-blue-600'
-    },
-    {
-      number: '02',
-      icon: <Database className="w-8 h-8" />,
-      title: 'Recopilamos Datos',
-      description: 'Nuestro sistema recopila millones de menciones de redes sociales, noticias y foros públicos',
-      details: [
-        'Análisis de redes sociales principales',
-        'Monitoreo de medios digitales',
-        'Verificación de fuentes confiables'
-      ],
-      color: 'from-purple-500 to-purple-600'
-    },
-    {
-      number: '03',
-      icon: <Brain className="w-8 h-8" />,
-      title: 'Procesamiento Inteligente',
-      description: 'Algoritmos de IA analizan el sentimiento, contexto y tendencias en los datos recopilados',
-      details: [
-        'Análisis de lenguaje natural',
-        'Detección de contexto y sarcasmo',
-        'Clasificación de sentimientos'
-      ],
-      color: 'from-pink-500 to-pink-600'
-    },
-    {
-      number: '04',
-      icon: <BarChart3 className="w-8 h-8" />,
-      title: 'Visualización de Resultados',
-      description: 'Recibe reportes detallados con gráficos interactivos y métricas clave',
-      details: [
-        'Dashboards interactivos',
-        'Exportación de reportes',
-        'Comparativas y tendencias'
-      ],
-      color: 'from-green-500 to-green-600'
-    }
-  ];
+ const steps = [
+  {
+    number: '01',
+    icon: <Search className="w-8 h-8" />,
+    title: 'Selecciona el Candidato',
+    description: 'Ingresa el nombre del candidato que deseas analizar',
+    details: [
+      'Búsqueda únicamente por nombre',
+      'Análisis individual por candidato'
+    ],
+    color: 'from-blue-500 to-blue-600'
+  },
+  {
+    number: '02',
+    icon: <Database className="w-8 h-8" />,
+    title: 'Filtrado Temporal',
+    description: 'El sistema filtra las publicaciones según el rango de fechas seleccionado',
+    details: [
+      'Definición de periodo de análisis',
+      'Comparación de cambios en el tiempo'
+    ],
+    color: 'from-purple-500 to-purple-600'
+  },
+  {
+    number: '03',
+    icon: <Brain className="w-8 h-8" />,
+    title: 'Análisis de Sentimiento',
+    description: 'Se analiza el sentimiento de las publicaciones asociadas al candidato',
+    details: [
+      'Clasificación: positivo, neutral y negativo',
+      'Procesamiento automático del texto'
+    ],
+    color: 'from-pink-500 to-pink-600'
+  },
+  {
+    number: '04',
+    icon: <BarChart3 className="w-8 h-8" />,
+    title: 'Resultados y Conclusiones',
+    description: 'Visualiza la distribución de sentimientos y conclusiones generadas por IA',
+    details: [
+      'Gráficos de distribución',
+      'Resumen interpretativo con Gemini',
+      'Apoyo al análisis académico'
+    ],
+    color: 'from-green-500 to-green-600'
+  }
+];
+
 
   const methodology = [
     {
@@ -84,7 +82,7 @@ export function HowItWorksView() {
             <h1 className="text-4xl font-bold text-gray-900">¿Cómo Funciona?</h1>
           </div>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Nuestra plataforma utiliza tecnología avanzada de inteligencia artificial para analizar millones de opiniones y generar insights precisos sobre el panorama electoral
+La plataforma emplea técnicas de análisis de sentimiento basadas en procesamiento de lenguaje natural para evaluar la percepción pública de un candidato, delimitada por un rango temporal, y generar visualizaciones y conclusiones asistidas por inteligencia artificial.
           </p>
         </div>
 
