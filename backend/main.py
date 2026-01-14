@@ -309,6 +309,41 @@ def filtrar_por_diccionario(textos, sentimiento):
 
 # Generar wordclouds separados por sentimiento
 
+
+# --------------------------------------------------------------------------------------
+# Función auxiliar para usar Gemini en la selección de keywords para WordCloud
+# --------------------------------------------------------------------------------------
+def extraer_palabras_clave_gemini(textos, sentimiento):
+    """Usa Gemini para extraer palabras clave relevantes y limpiar ruido."""
+    if not model_gemini:
+        return None
+    
+    # Unir textos y truncar si es demasiado largo (aprox 25k caracteres para evitar errores de cuota/contexto)
+    texto_completo = "\n".join(textos)[:25000] 
+    
+    prompt = f"""
+    Actúa como un experto en análisis de sentimiento político de Ecuador.
+    Analiza los siguientes comentarios que han sido clasificados como: {sentimiento}.
+    
+    Tu tarea es generar una lista de palabras clave para una Nube de Palabras (WordCloud).
+    
+    Instrucciones obligatorias:
+    1. EXTRAE solo las palabras o frases cortas (máx 2 palabras) que justifiquen el sentimiento {sentimiento}.
+    2. ELIMINA RUIDO: Nombres propios de políticos (Noboa, Luisa, Topic, Iza, etc.), ciudades (Quito, Guayaquil, Ecuador), gentilicios, y palabras genéricas (país, gobierno, presidente, gente, ver, video, pueblo).
+    3. MANTÉN la frecuencia semántica: Si un tema es muy recurrente en los textos, repite las palabras clave relacionadas varias veces en tu respuesta para que resalten en la nube.
+    4. Devuelve SOLO las palabras separadas por espacio. Sin explicaciones, sin markdown, sin viñetas.
+
+    Textos a analizar:
+    {texto_completo}
+    """
+    
+    try:
+        response = model_gemini.generate_content(prompt)
+        return response.text.replace("\n", " ").strip()
+    except Exception as e:
+        print(f"Error Gemini WordCloud ({sentimiento}): {e}")
+        return None
+
 def generar_wordclouds_por_sentimiento(publicaciones):
     textos_por_sentimiento = {
         "POS": [],
@@ -350,9 +385,26 @@ def generar_wordclouds_por_sentimiento(publicaciones):
     wordclouds_sentimiento = {}
     for sentimiento, textos in textos_por_sentimiento.items():
         color = colores_map.get(sentimiento, "viridis")
-        # Filtrar palabras de polaridad opuesta antes de generar la wordcloud
-        textos_filtrados = filtrar_por_diccionario(textos, sentimiento)
-        img_base64, palabras_frecuentes = generar_wordcloud(textos_filtrados, colormap=color)
+        
+        # --- LÓGICA MEJORADA CON IA ---
+        texto_para_nube = None
+        palabras_frecuentes = {}
+        img_base64 = None
+
+        # Intentar usar Gemini para filtrar ruido y extraer esencia si hay suficientes textos
+        if model_gemini and textos and len(textos) > 5:
+             print(f"Mejorando WordCloud {sentimiento} con IA Gemini...")
+             texto_para_nube = extraer_palabras_clave_gemini(textos, sentimiento)
+        
+        if texto_para_nube:
+             # Si Gemini funcionó, generamos la nube directamente con su respuesta "limpia"
+             # Pasamos como lista de 1 elemento, generar_wordcloud lo limpiará (quita acentos/letras sueltas) pero mantendrá la esencia
+             img_base64, palabras_frecuentes = generar_wordcloud([texto_para_nube], colormap=color)
+        else:
+             # Fallback lógica clásica (filtrado regex + diccionario) si falla Gemini o hay pocos textos
+             print(f"Generando WordCloud {sentimiento} con lógica local (Regex/Diccionario)...")
+             textos_filtrados = filtrar_por_diccionario(textos, sentimiento)
+             img_base64, palabras_frecuentes = generar_wordcloud(textos_filtrados, colormap=color)
         
         wordclouds_sentimiento[sentimiento] = {
             "imagen": img_base64, 
@@ -365,7 +417,7 @@ def generar_wordclouds_por_sentimiento(publicaciones):
 # Cargar corpus desde archivo JSON 
 #--------------------------------------------------------------------------------------
 def cargar_corpus():
-    ruta = os.path.join(os.path.dirname(__file__), "data/corpus.json") 
+    ruta = os.path.join(os.path.dirname(__file__), "data/corpus_completo.json") 
     try:
         with open(ruta, "r", encoding="utf-8") as f:
             return json.load(f)
