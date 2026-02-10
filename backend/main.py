@@ -233,15 +233,36 @@ def generar_wordcloud(textos, colormap='viridis'):
         return None, {}
     
 # Función para normalizar palabras y detectar insultos disfrazados
-def normalizar_palabra(palabra):
-    # Quitar acentos y normalizar caracteres
-    palabra = unicodedata.normalize('NFKD', palabra).encode('ascii', 'ignore').decode('utf-8')
-    # Reemplazos comunes de leet y símbolos
+def normalizar_palabra(palabra: str) -> str:
+    palabra = palabra.lower()
+
+    # Quitar acentos
+    palabra = unicodedata.normalize('NFKD', palabra)
+    palabra = palabra.encode('ascii', 'ignore').decode('utf-8')
+
+    # Eliminar separadores comunes de evasión
+    palabra = re.sub(r'[\W_]+', '', palabra)
+
+    # Normalizar leet general
     reemplazos = {
-        '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '0': 'o', '@': 'a', '$': 's', '!': 'i', 'x': 'a', '*': 'a', '?': 'a', 'ñ': 'n'
+        '0': 'o',
+        '1': 'i',
+        '3': 'e',
+        '4': 'a',
+        '5': 's',
+        '7': 't',
+        '@': 'a',
+        '$': 's',
+        '!': 'i',
+        'x': 'u',  # vocal comodín
     }
+
     for k, v in reemplazos.items():
         palabra = palabra.replace(k, v)
+
+    # Reducir repeticiones (xx → x, uuu → u)
+    palabra = re.sub(r'(.)\1{2,}', r'\1\1', palabra)
+
     return palabra
 
 # Regex para malas palabras disfrazadas (puedes ampliar)
@@ -329,8 +350,10 @@ def extraer_palabras_clave_gemini(textos, sentimiento):
     
     Instrucciones obligatorias:
     1. EXTRAE solo las palabras o frases cortas (máx 2 palabras) que justifiquen el sentimiento {sentimiento}.
-    2. ELIMINA RUIDO: Nombres propios de políticos (Noboa, Luisa, Topic, Iza, etc.), ciudades (Quito, Guayaquil, Ecuador), gentilicios, y palabras genéricas (país, gobierno, presidente, gente, ver, video, pueblo).
-    3. MANTÉN la frecuencia semántica: Si un tema es muy recurrente en los textos, repite las palabras clave relacionadas varias veces en tu respuesta para que resalten en la nube.
+    2. ELIMINA RUIDO: Nombres propios de políticos (Noboa, Luisa, Topic, Iza, etc.), ciudades (Quito, Guayaquil, Ecuador), 
+    gentilicios, y palabras genéricas (país, gobierno, presidente, gente, ver, video, pueblo).
+    3. MANTÉN la frecuencia semántica: Si un tema es muy recurrente en los textos, repite las palabras clave relacionadas 
+    varias veces en tu respuesta para que resalten en la nube.
     4. Devuelve SOLO las palabras separadas por espacio. Sin explicaciones, sin markdown, sin viñetas.
 
     Textos a analizar:
