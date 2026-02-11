@@ -26,7 +26,8 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading, dat
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 mb-10 transform transition-all hover:shadow-2xl">
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6" aria-label="search form"
+>
         
         {/* --- Campo de Búsqueda Principal --- */}
         <div>
