@@ -24,11 +24,11 @@ palabras_clave = [
 driver = get_driver()
 
 # 1. Obtenemos el Directorio de Trabajo Actual (donde se ejecuta el Notebook)
-#    Si ejecutas desde 'proyecto/src', esto devolverá 'proyecto/src'
+#    Si ejecutas desde 'proyecto/webScraping', esto devolverá 'proyecto/webScraping'
 current_dir = Path(os.getcwd())
 
 # 2. Subimos un nivel para llegar a la carpeta 'proyecto/' (donde está .env)
-#    Esto cambia la ruta de 'proyecto/src' a 'proyecto'
+#    Esto cambia la ruta de 'proyecto/webScraping' a 'proyecto'
 base_dir = current_dir.parent
 
 # 3. Construimos la ruta completa al archivo .env

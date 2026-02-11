@@ -99,7 +99,7 @@ def login_twitter(driver, usuario: str, password: str, correo: str = None):
                     datos_ingresados["password"] = True
 
                     time.sleep(random.uniform(8.0, 15.0))  # Espera tras iniciar sesión
-                    print("✅ Inicio de sesión completado. Verificando redirección...")
+                    print(" - Inicio de sesión completado. Verificando redirección...")
                     break
 
             except NoSuchElementException:

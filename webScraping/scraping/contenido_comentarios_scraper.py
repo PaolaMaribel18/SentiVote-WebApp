@@ -9,6 +9,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 def minar_texto_comentarios(driver, carpeta_entrada: str, carpeta_salida: str, limite=None):
+    """
+    Extrae el texto de los comentarios desde sus enlaces
+    
+    """
+    
+    # Versión original
     if not os.path.exists(carpeta_salida):
         os.makedirs(carpeta_salida)
 

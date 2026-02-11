@@ -91,6 +91,6 @@ def guardar_enlaces_candidatos(driver, candidatos_presidenciales_2025, palabras_
 
         print(f"Guardado: {ruta_archivo}")
         pausa = 420 + random.uniform(-30, 30)
-        print(f"⏳ Pausa de {pausa/60:.1f} minutos antes del siguiente candidato...")
+        print(f" - Pausa de {pausa/60:.1f} minutos antes del siguiente candidato...")
         time.sleep(pausa)
 
